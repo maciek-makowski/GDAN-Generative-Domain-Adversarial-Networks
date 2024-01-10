@@ -5,8 +5,11 @@ import numpy as np
 import do_mpc
 import casadi as ca
 import matplotlib.pyplot as plt
+import os
 import logging
+from do_mpc.data import save_results, load_results
 import random
+
 
 # Configure the logger
 logging.basicConfig(level=logging.INFO)  # Set the logging level to INFO
@@ -125,6 +128,8 @@ weight_importance_8 = model.set_variable(var_type = '_u', var_name = 'weight_imp
 weight_importance_9 = model.set_variable(var_type = '_u', var_name = 'weight_importance_9', shape=(1,1))
 weight_importance_10 = model.set_variable(var_type = '_u', var_name = 'weight_importance_10', shape=(1,1))
 
+
+weight_imp_state = model.set_variable(var_type= '_x', var_name = 'weight_imp_state', shape=(11,1))
 current_accuracy = model.set_variable(var_type = '_x', var_name='current_accuracy')
 #features = model.set_variable(var_type = '_x', var_name = 'features', shape = (18357,11))
 
@@ -143,7 +148,9 @@ weight_importance = ca.vertcat(
 
 )
 #model.set_rhs('features', features)
-model.set_rhs('current_accuracy', calc_accuracy(perform_multiplication(weight_importance, features_strat, 1, 18357), labels, theta))
+model.set_rhs('current_accuracy', calc_accuracy(perform_multiplication(weight_imp_state, features_strat, 1, 18357), labels, theta))
+model.set_rhs('weight_imp_state', weight_imp_state - (10 * weight_importance))
+
 
 model.setup()
 
@@ -152,15 +159,18 @@ print("Model setup")
 mpc = do_mpc.controller.MPC(model)
 
 setup_mpc = {
-    'n_horizon': 100,
+    'n_horizon': 50,
     't_step': 1,
-    'n_robust': 20,
+    'n_robust': 5,
     'store_full_solution': True
 }
 mpc.set_param(**setup_mpc)
 
+mpc.bounds['lower', '_x', 'weight_imp_state'] = -2
+mpc.bounds['upper', '_x', 'weight_imp_state'] = 2
+
 for i in range(11):
-    mpc.bounds['lower', '_u', f'weight_importance_{i}'] = 0
+    mpc.bounds['lower', '_u', f'weight_importance_{i}'] = -1
     mpc.bounds['upper', '_u', f'weight_importance_{i}'] = 1
 
 
@@ -169,10 +179,9 @@ lterm = (desired_accuracy - current_accuracy) * (desired_accuracy - current_accu
 #lterm = ca.vertcat([0])
 
 #mterm = ca.vertcat([0])
-mterm = (desired_accuracy - current_accuracy) * (desired_accuracy - current_accuracy)
+mterm = 1000 * (desired_accuracy - current_accuracy) * (desired_accuracy - current_accuracy)
 
 mpc.set_objective(mterm = mterm, lterm = lterm)
-
 mpc.set_rterm(
     weight_importance_0=random.random() * 1e-3,
     weight_importance_1=random.random() * 1e-3,
@@ -186,6 +195,19 @@ mpc.set_rterm(
     weight_importance_9=random.random() * 1e-3,
     weight_importance_10=random.random() * 1e-3,
 )
+# mpc.set_rterm(
+#     weight_importance_0= 1e-3,
+#     weight_importance_1= 1e-3,
+#     weight_importance_2= 1e-3,
+#     weight_importance_3= 1e-3,
+#     weight_importance_4= 1e-3,
+#     weight_importance_5= 1e-3,
+#     weight_importance_6= 1e-3,
+#     weight_importance_7= 1e-3,
+#     weight_importance_8= 1e-3,
+#     weight_importance_9= 1e-3,
+#     weight_importance_10= 1e-3,
+# )
 
 mpc.setup()
 
@@ -200,8 +222,12 @@ simulator.setup()
 print("Simulator setup")
 
 mpc.x0['current_accuracy'] = baseline_acc
+mpc.x0['weight_imp_state'] = np.ones(11)
+#mpc.x0['weight_imp_state'] = np.random.rand(11)
 
 simulator.x0['current_accuracy'] = baseline_acc
+#simulator.x0['weight_imp_state'] = np.random.rand(11)
+simulator.x0['weight_imp_state'] = np.ones(11)
 
 mpc.set_initial_guess()
 
@@ -217,18 +243,19 @@ print("U0 ", u0)
 
 
 
-for i in range(5):
-    x0 = simulator.make_step(u0)
+for i in range(100):
     u0 = mpc.make_step(x0)
+    x0 = simulator.make_step(u0)
     print("Current accuracy", mpc.x0['current_accuracy'])
+    print("Current weight imp", mpc.x0['weight_imp_state'], type(np.array(mpc.x0['weight_imp_state'])))
+    weight_imp_for_test = np.array(mpc.x0['weight_imp_state'])
     print("U0", u0)
-    print("X0", x0)
 
     print("Verification")
     new_features = np.empty_like(features_strat)
     for index, row in enumerate(features_strat):
         row = row.reshape(-1,1)
-        new_features[index, :] = (row * u0).reshape(11)
+        new_features[index, :] = (row * weight_imp_for_test).reshape(11)
 
 
     baseline_acc = ((new_features.dot(theta) > 0)  == labels).mean()
@@ -250,3 +277,31 @@ sim_graphics.plot_results()
 
 ax.legend
 plt.show()
+
+folder_path = "./results"
+for filename in os.listdir(folder_path):
+    file_path = os.path.join(folder_path, filename)
+    try:
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+            print(f"Removed: {filename}")
+    except Exception as e:
+        print(f"Error while removing {filename}: {e}")
+
+
+save_results([mpc, simulator])
+
+results = load_results('./results/results.pkl')
+
+print("results", results)
+keys = ['_time', '_x', '_y', '_u', '_z', '_tvp', '_p', '_aux']
+
+
+print("Results MPC", results['mpc'])
+print("Results simulation", results['simulator'])
+for key in keys:
+    print(key, results['mpc'][key])
+
+for key in keys:
+    print(key, results['simulator'][key])
+
