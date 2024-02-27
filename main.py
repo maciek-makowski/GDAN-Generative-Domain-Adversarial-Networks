@@ -9,6 +9,7 @@ import os
 import logging
 from do_mpc.data import save_results, load_results
 import random
+import sys
 
 
 # Configure the logger
@@ -18,11 +19,6 @@ logging.basicConfig(level=logging.INFO)  # Set the logging level to INFO
 logger = logging.getLogger(__name__)
 
 def perform_multiplication(importance_matrix, features, x,y):
-    # result_matrix = ca.MX()
-    # for row in features: 
-    #     new_row = row.T * importance_matrix       
-    #     result_matrix = ca.vertcat(result_matrix, new_row)
-
     result_matrix = ([row.T * importance_matrix for row in features]) 
 
     print(result_matrix[0])
@@ -37,19 +33,6 @@ def perform_multiplication(importance_matrix, features, x,y):
 
     for index, row in enumerate(result_matrix):
         reshaped_matrix[index, :]= row 
-    # print("Tyep", type(result_matrix), result_matrix[0])   
-    # # result_matrix = ca.vertcat(*[row.T * importance_matrix for row in features]) 
-    # # transform_function = ca.Function('trans', [importance_matrix], [result_matrix])
-    # # final_result_matrix = transform_function(importance_matrix)
-
-    # print(final_result_matrix[0:11])
-    # #final_result_matrix = ca.reshape(final_result_matrix, 18357, 11)
-
-    # matrix_reshaped = ca.horzsplit(ca.vertcat(final_result_matrix), [0,11,1])
-    # # matrix_result = ca.horzcat(*matrix_reshaped)
-    # # final_result_matrix = matrix_result[:18357, :]
-    # print(matrix_reshaped[0,:])
-    # print("ELOOOO")
 
     return reshaped_matrix
 
@@ -60,17 +43,9 @@ def calc_accuracy(features, labels, classifier):
     #print("Featues type", type(features), features.size1(), features.size2())
     length = labels.shape[0]
     classifier = classifier.reshape(-1,1)
-    logger.info(f"Features 0,5 : {features[0,:]} {type(features)} {type(classifier)}")
-
     temp = ca.mtimes(features, classifier)    
-    logger.info(f"temp 0,5  {temp[0,:]}")
-
     pred = temp > 0 
-    logger.info(f"Pred 0,5 {pred[0,:]}")
     corr_pred = ca.eq(pred, labels)
-    logger.info(f"Corr_pred {corr_pred[0,:]}")
-    # pdb.set_trace()
-    #logger.info(f"acc {ca.sum1(corr_pred)}")
     accuracy = ca.sum1(corr_pred)/ length
     
     return accuracy
@@ -129,6 +104,31 @@ weight_importance_9 = model.set_variable(var_type = '_u', var_name = 'weight_imp
 weight_importance_10 = model.set_variable(var_type = '_u', var_name = 'weight_importance_10', shape=(1,1))
 
 
+UP_0 = model.set_variable('_p', 'UP_0')
+UP_1 = model.set_variable('_p', 'UP_1')
+UP_2 = model.set_variable('_p', 'UP_2')
+UP_3 = model.set_variable('_p', 'UP_3')
+UP_4 = model.set_variable('_p', 'UP_4')
+UP_5 = model.set_variable('_p', 'UP_5')
+UP_6 = model.set_variable('_p', 'UP_6')
+UP_7 = model.set_variable('_p', 'UP_7')
+UP_8 = model.set_variable('_p', 'UP_8')
+UP_9 = model.set_variable('_p', 'UP_9')
+UP_10 = model.set_variable('_p', 'UP_10')
+
+# TVP_0 = model.set_variable('_tvp', 'TVP_0')
+# TVP_1 = model.set_variable('_tvp', 'TVP_1')
+# TVP_2 = model.set_variable('_tvp', 'TVP_2')
+# TVP_3 = model.set_variable('_tvp', 'TVP_3')
+# TVP_4 = model.set_variable('_tvp', 'TVP_4')
+# TVP_5 = model.set_variable('_tvp', 'TVP_5')
+# TVP_6 = model.set_variable('_tvp', 'TVP_6')
+# TVP_7 = model.set_variable('_tvp', 'TVP_7')
+# TVP_8 = model.set_variable('_tvp', 'TVP_8')
+# TVP_9 = model.set_variable('_tvp', 'TVP_9')
+# TVP_10 = model.set_variable('_tvp', 'TVP_10')
+
+
 weight_imp_state = model.set_variable(var_type= '_x', var_name = 'weight_imp_state', shape=(11,1))
 current_accuracy = model.set_variable(var_type = '_x', var_name='current_accuracy')
 #features = model.set_variable(var_type = '_x', var_name = 'features', shape = (18357,11))
@@ -147,9 +147,39 @@ weight_importance = ca.vertcat(
                 weight_importance_10
 
 )
+
+# time_params = ca.vertcat(
+#                 TVP_0,
+#                 TVP_1,
+#                 TVP_2,
+#                 TVP_3,
+#                 TVP_4,
+#                 TVP_5,
+#                 TVP_6,
+#                 TVP_7,
+#                 TVP_8,
+#                 TVP_9,
+#                 TVP_10
+
+# )
+
+uncertain_params = ca.vertcat(
+                UP_0,
+                UP_1,
+                UP_2,
+                UP_3,
+                UP_4,
+                UP_5,
+                UP_6,
+                UP_7,
+                UP_8,
+                UP_9,
+                UP_10
+
+)
 #model.set_rhs('features', features)
 model.set_rhs('current_accuracy', calc_accuracy(perform_multiplication(weight_imp_state, features_strat, 1, 18357), labels, theta))
-model.set_rhs('weight_imp_state', weight_imp_state - (10 * weight_importance))
+model.set_rhs('weight_imp_state', weight_imp_state + 0.001 * (weight_importance * uncertain_params ))
 
 
 model.setup()
@@ -158,55 +188,107 @@ print("Model setup")
 
 mpc = do_mpc.controller.MPC(model)
 
+prediction_horizon = 3
+
 setup_mpc = {
-    'n_horizon': 50,
+    'n_horizon': prediction_horizon,
     't_step': 1,
-    'n_robust': 5,
+    'n_robust': 1,
     'store_full_solution': True
 }
 mpc.set_param(**setup_mpc)
 
-mpc.bounds['lower', '_x', 'weight_imp_state'] = -2
-mpc.bounds['upper', '_x', 'weight_imp_state'] = 2
+mpc.bounds['lower', '_x', 'weight_imp_state'] = 0
+mpc.bounds['upper', '_x', 'weight_imp_state'] = 1
 
 for i in range(11):
     mpc.bounds['lower', '_u', f'weight_importance_{i}'] = -1
     mpc.bounds['upper', '_u', f'weight_importance_{i}'] = 1
 
+### UNCERTAIN PARAMETERS 
+
+n_combinations = 20
+
+p_template = mpc.get_p_template(n_combinations)
+
+print(p_template)
+
+def p_fun(t_now):
+    for i in range(n_combinations):
+        p_template['_p', i] = np.random.normal(1, 0.1, 11)
+    return p_template
+
+mpc.set_p_fun(p_fun)
+
+###     TIME VARYING PARAMERTERS 
+# tvp_template = mpc.get_tvp_template()
+
+# print(tvp_template['_tvp'])
+
+# def tvp_fun(t_now):
+#     for i in  range(prediction_horizon):
+#         tvp_template['_tvp',i] = np.random.uniform(0,2,11)
+#     return tvp_template
+ 
+# # p_template['_p',0] = np.random.rand(11)
+
+
+# mpc.set_tvp_fun(tvp_fun)
+
+
 
 print("Desired accuracy before", desired_accuracy)
-lterm = (desired_accuracy - current_accuracy) * (desired_accuracy - current_accuracy)
+norm_result = ca.norm_2(
+                ca.vertcat(
+                weight_importance_0,
+                weight_importance_1,
+                weight_importance_2,
+                weight_importance_3,
+                weight_importance_4,
+                weight_importance_5,
+                weight_importance_6,
+                weight_importance_7,
+                weight_importance_8,
+                weight_importance_9,
+                weight_importance_10
+
+)
+
+)
+
+lterm = 1 - norm_result
+#lterm = (desired_accuracy - current_accuracy) * (desired_accuracy - current_accuracy)
 #lterm = ca.vertcat([0])
 
-#mterm = ca.vertcat([0])
-mterm = 1000 * (desired_accuracy - current_accuracy) * (desired_accuracy - current_accuracy)
+# mterm = ca.vertcat([0])
+mterm = 10 * (desired_accuracy - current_accuracy)
 
 mpc.set_objective(mterm = mterm, lterm = lterm)
-mpc.set_rterm(
-    weight_importance_0=random.random() * 1e-3,
-    weight_importance_1=random.random() * 1e-3,
-    weight_importance_2=random.random() * 1e-3,
-    weight_importance_3=random.random() * 1e-3,
-    weight_importance_4=random.random() * 1e-3,
-    weight_importance_5=random.random() * 1e-3,
-    weight_importance_6=random.random() * 1e-3,
-    weight_importance_7=random.random() * 1e-3,
-    weight_importance_8=random.random() * 1e-3,
-    weight_importance_9=random.random() * 1e-3,
-    weight_importance_10=random.random() * 1e-3,
-)
 # mpc.set_rterm(
-#     weight_importance_0= 1e-3,
-#     weight_importance_1= 1e-3,
-#     weight_importance_2= 1e-3,
-#     weight_importance_3= 1e-3,
-#     weight_importance_4= 1e-3,
-#     weight_importance_5= 1e-3,
-#     weight_importance_6= 1e-3,
-#     weight_importance_7= 1e-3,
-#     weight_importance_8= 1e-3,
-#     weight_importance_9= 1e-3,
-#     weight_importance_10= 1e-3,
+#     weight_importance_0=random.random() * 1e-3,
+#     weight_importance_1=random.random() * 1e-3,
+#     weight_importance_2=random.random() * 1e-3,
+#     weight_importance_3=random.random() * 1e-3,
+#     weight_importance_4=random.random() * 1e-3,
+#     weight_importance_5=random.random() * 1e-3,
+#     weight_importance_6=random.random() * 1e-3,
+#     weight_importance_7=random.random() * 1e-3,
+#     weight_importance_8=random.random() * 1e-3,
+#     weight_importance_9=random.random() * 1e-3,
+#     weight_importance_10=random.random() * 1e-3,
+# )
+# mpc.set_rterm(
+#     weight_importance_0= 1e-2,
+#     weight_importance_1= 1e-2,
+#     weight_importance_2= 1e-2,
+#     weight_importance_3= 1e-2,
+#     weight_importance_4= 1e-2,
+#     weight_importance_5= 1e-2,
+#     weight_importance_6= 1e-2,
+#     weight_importance_7= 1e-2,
+#     weight_importance_8= 1e-2,
+#     weight_importance_9= 1e-2,
+#     weight_importance_10= 1e-2,
 # )
 
 mpc.setup()
@@ -217,17 +299,48 @@ simulator = do_mpc.simulator.Simulator(model)
 
 simulator.set_param(t_step = 1)
 
+### UNCERTAIN PPARMS
+p_template_sim = simulator.get_p_template()
+
+print(p_template_sim)
+
+def p_fun_sim(t_now):
+    for key in p_template_sim.keys():
+        #print("key", key, "value", p_template_sim[key])
+        p_template_sim[key] = 1 #np.random.uniform(0,2,1) 
+    return p_template_sim
+
+
+simulator.set_p_fun(p_fun_sim)
+
+### TIME VARYING PARAMS
+
+# tvp_template_sim = simulator.get_tvp_template()
+
+# print(tvp_template_sim)
+
+# #print(p_template_sim)
+
+# def tvp_fun_sim(t_now):
+#     for key in tvp_template_sim.keys():
+#         #print("key", key, "value", p_template_sim[key])
+#         tvp_template_sim[key] = 1 #np.random.uniform(0,2,1) 
+#     return tvp_template_sim
+
+
+# simulator.set_tvp_fun(tvp_fun_sim)
+
 simulator.setup()
 
 print("Simulator setup")
 
 mpc.x0['current_accuracy'] = baseline_acc
-mpc.x0['weight_imp_state'] = np.ones(11)
-#mpc.x0['weight_imp_state'] = np.random.rand(11)
+#mpc.x0['weight_imp_state'] = np.ones(11)
+mpc.x0['weight_imp_state'] = np.random.rand(11)
 
 simulator.x0['current_accuracy'] = baseline_acc
-#simulator.x0['weight_imp_state'] = np.random.rand(11)
-simulator.x0['weight_imp_state'] = np.ones(11)
+simulator.x0['weight_imp_state'] = np.random.rand(11)
+#simulator.x0['weight_imp_state'] = np.ones(11)
 
 mpc.set_initial_guess()
 
@@ -243,13 +356,14 @@ print("U0 ", u0)
 
 
 
-for i in range(100):
+for i in range(20):
     u0 = mpc.make_step(x0)
     x0 = simulator.make_step(u0)
     print("Current accuracy", mpc.x0['current_accuracy'])
     print("Current weight imp", mpc.x0['weight_imp_state'], type(np.array(mpc.x0['weight_imp_state'])))
     weight_imp_for_test = np.array(mpc.x0['weight_imp_state'])
     print("U0", u0)
+
 
     print("Verification")
     new_features = np.empty_like(features_strat)
