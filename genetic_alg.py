@@ -60,7 +60,7 @@ print(initial_weight_matrix.shape)
 
 def fitness_func(ga_instance, solution, solution_idx):
     modified_features = ([row.T * solution for row in features_strat]) 
-    accuracy = calc_accuracy(modified_features, labels, theta, desired_accuracy)
+    accuracy = calc_accuracy(modified_features, labels, theta)
     if desired_accuracy - accuracy == 0:
         fitness = float('inf')
     else: 
@@ -101,34 +101,71 @@ ga_instance = pygad.GA(num_generations=num_generations,
                         initial_population= initial_weight_matrix
                         )
 
-for _ in range(1000):
-    # print("START POP",ga_instance.population)
-    # print("START POP SHAPE",ga_instance.population.shape)
-    ga_instance.run()
+#for _ in range(10):
+# print("START POP",ga_instance.population)
+# print("START POP SHAPE",ga_instance.population.shape)
+ga_instance.run()
+
+solution, solution_fitness, solution_idx = ga_instance.best_solution()
+
+print("Parameters of the best solution : {solution}".format(solution=solution))
+print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+
+prediction = calc_accuracy(perform_multiplication(solution, features_strat), labels, theta)
+print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
+
+best_solution.append(solution)
+
+
+normal_accuracies = []
+modified_accuracies = []
+for _ in range(10): 
+    observation, _, _, _ = env.step(theta)
+    features_strat, labels = observation["features"], observation["labels"]
+    print("Strat features", features_strat[0:2,:])
+    print("Labels", labels)
+
+    normal_accuracy = calc_accuracy(features_strat, labels, theta)
+    print("Normal accyracy", normal_accuracy)
+    modified_accuracy = calc_accuracy(perform_multiplication(solution, features_strat), labels, theta)
+    print("Modified accuracy", modified_accuracy)
+
+    normal_accuracies.append(normal_accuracy)
+    modified_accuracies.append(modified_accuracy)
+    theta =  np.random.rand(11)
+
+
+# Plotting the lists
+plt.plot(normal_accuracies, label='non modified feature representation')
+plt.plot(modified_accuracies, label='modififed feature representation')
+
+# Adding a horizontal line
+plt.axhline(y=baseline_acc, color='r', linestyle='--', label='Baseline accuracy')
+
+# Adding titles for the axes
+plt.xlabel('Iterations of new data being generated')
+plt.ylabel('Accuracy values')
+plt.title('Performance with generation of a linear transformation on data from Perdomo et al. 2020')
+# Adding a legend
+plt.legend()
+
+# Turning grid on
+plt.grid(True)
+
+# Displaying the plot
+plt.show()
+# ga_instance.plot_fitness()
+# #ga_instance.plot_new_solution_rate()
+# ga_instance.plot_genes(graph_type = 'histogram')
+
+#np.savez('best_soluton_list.npz', *best_solution)
+
     
-    solution, solution_fitness, solution_idx = ga_instance.best_solution()
-    print("Type solution", type(solution))
-    print("shape of that shit", solution.shape)
-    print("Parameters of the best solution : {solution}".format(solution=solution))
-    print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
+# averaged_best_sol = np.zeros(11)
+# for i in best_solution:
+#     for index in range(len(i)):
+#         averaged_best_sol[index] += i[index]
 
-    prediction = calc_accuracy(perform_multiplication(solution, features_strat), labels, theta, desired_accuracy)
-    print("Predicted output based on the best solution : {prediction}".format(prediction=prediction))
-
-    best_solution.append(solution)
-
-    # ga_instance.plot_fitness()
-    # #ga_instance.plot_new_solution_rate()
-    # ga_instance.plot_genes(graph_type = 'histogram')
-
-np.savez('best_soluton_list.npz', *best_solution)
-
-    
-averaged_best_sol = np.zeros(11)
-for i in best_solution:
-    for index in range(len(i)):
-        averaged_best_sol[index] += i[index]
-
-averaged_best_sol = averaged_best_sol / 11
-print("Average best soluton ", averaged_best_sol)
+# averaged_best_sol = averaged_best_sol / 11
+# print("Average best soluton ", averaged_best_sol)
 
