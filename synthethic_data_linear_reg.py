@@ -54,7 +54,9 @@ def perform_elementwise_multiplication(data, weight_vector):
     return result
 
 def fitness_func(ga_instance, solution, solution_idx):
-    modified_data = perform_elementwise_multiplication(X, solution)
+    normalized_solution = solution / np.sum(solution)
+
+    modified_data = perform_elementwise_multiplication(X, normalized_solution)
     modified_predictions = model.predict(modified_data)
     new_MSE = mean_squared_error(Y, modified_predictions)
     if new_MSE == mean_squared_error_:
@@ -73,7 +75,7 @@ num_samples = 1000
 
 ## Define the linear regression model 
 model = LinearRegression()
-
+retrained_model = LinearRegression()
 
 mu = generate_vector_with_norm(no_features, epsilon)
 covariance_matrix = generate_covariance_matrix(no_features)
@@ -110,6 +112,7 @@ ga_instance = pygad.GA(num_generations=num_generations,
 ## Definition of arrays for plotting 
 best_MSE = []
 best_modified_MSE = []
+best_retrained_MSE = []
 ## The looping proces  
 for i in range(10):
     X,Y = generate_data(theta, num_samples, mu, covariance_matrix)
@@ -133,9 +136,13 @@ for i in range(10):
         temp_new_modified_MSE =  mean_squared_error(Y, model.predict(perform_elementwise_multiplication(X, solution)))
         print("MSE before modification of the featues", temp_new_MSE)
         print("MSE after modification of the features", temp_new_modified_MSE)
+
+        retrained_model.fit(X,Y)
+        retrained_MSE = mean_squared_error(Y, retrained_model.predict(X))
         
         best_MSE.append(temp_new_MSE)
         best_modified_MSE.append(temp_new_modified_MSE)
+        best_retrained_MSE.append(retrained_MSE)
 
         print("")
         #theta = model.coef_
@@ -146,9 +153,16 @@ for i in range(10):
         print("MSE before modification of the featues", temp_new_MSE )
         print("MSE after modification of the features", temp_new_modified_MSE)
 
+        retrained_model.fit(X,Y)
+        retrained_MSE = mean_squared_error(Y, retrained_model.predict(X))
+
+        print("MSE after retraining", retrained_MSE)
+
         best_MSE.append(temp_new_MSE)
         best_modified_MSE.append(temp_new_modified_MSE)
+        best_retrained_MSE.append(retrained_MSE)
 
+        
 
         print("")
 
@@ -159,6 +173,7 @@ for i in range(10):
 # Plotting the lists
 plt.plot(best_MSE, label='non modified feature representation')
 plt.plot(best_modified_MSE, label='modififed feature representation')
+plt.plot(best_retrained_MSE, label='retrained model')
 
 # Adding a horizontal line
 plt.axhline(y=mean_squared_error_, color='r', linestyle='--', label='Baseline MSE')
