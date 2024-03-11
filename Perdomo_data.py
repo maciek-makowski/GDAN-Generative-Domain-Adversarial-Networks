@@ -15,6 +15,8 @@ def calc_accuracy(features, labels, classifier):
     accuracy =((np.dot(features, classifier) > 0)  == labels).mean()
     return accuracy
 
+
+### Important rethink the construction of the fitness function maybe it's better to compute a weight matrix that will maximize the accuracy 
 def fitness_func(ga_instance, solution, solution_idx):
     modified_features = ([row.T * solution for row in X_strat]) 
     accuracy = calc_accuracy(modified_features, Y, theta)
@@ -97,7 +99,8 @@ retrained_accuracy = []
 new_rep_accuracy = []
 
 for t in range(num_iters):
-    eps = np.random.uniform(0,100)
+    #eps = np.random.uniform(0,100)
+    eps = 50
 
     if t==1:
         ga_instance.run()
@@ -110,7 +113,7 @@ for t in range(num_iters):
     
     print("t", t, "\n")
     # adjust distribution to current theta
-    X_strat = best_response(X, theta, eps, strat_features)
+    X_strat = best_response(X_strat, theta, eps, strat_features)
     
     # performative loss value of previous theta
     loss_start = evaluate_loss(X_strat, Y, theta, lam, strat_features)
@@ -146,6 +149,7 @@ new_rep_accuracy.insert(0, baseline_accuracy)
 #print("First, retrained, modified", accuracy_list, retrained_accuracy, new_rep_accuracy)
 for elements in zip(accuracy_list, retrained_accuracy, new_rep_accuracy):
     print(*elements)
+
 # Plotting the lists
 plt.plot(accuracy_list, label='Accuracy with first model')
 plt.plot(retrained_accuracy, label='Retrained accuracy')
@@ -158,7 +162,7 @@ plt.axhline(y=baseline_accuracy, color='r', linestyle='--', label='Baseline accu
 # Adding titles for the axes
 plt.xlabel('Iterations of new data being generated')
 plt.ylabel('Accuracy values')
-plt.title('Performance with generation of a linear transformation on data from Perdomo et al. 2020')
+plt.title('Performance with generation of a linear transformation on data from Perdomo et al. 2020 (without additional randomness)')
 # Adding a legend
 plt.legend()
 
