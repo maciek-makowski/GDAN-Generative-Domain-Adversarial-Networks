@@ -4,32 +4,14 @@ import matplotlib.pyplot as plt
 from scripts.data_prep_GMSC import load_data
 from scripts.optimization import logistic_regression, evaluate_loss
 from scripts.strategic import best_response
-
-
-def perform_multiplication(importance_matrix, features):
-    result_matrix = ([row.T * importance_matrix for row in features]) 
-    return result_matrix
-
-
-def calc_accuracy(features, labels, classifier):
-    accuracy =((np.dot(features, classifier) > 0)  == labels).mean()
-    return accuracy
-
-
-### Important rethink the construction of the fitness function maybe it's better to compute a weight matrix that will maximize the accuracy 
-def fitness_func(ga_instance, solution, solution_idx):
-    modified_features = ([row.T * solution for row in X_strat]) 
-    accuracy = calc_accuracy(modified_features, Y, theta)
-    if baseline_accuracy - accuracy == 0:
-        fitness = float('inf')
-    else: 
-        fitness = 1.0 / np.abs(baseline_accuracy - accuracy)
-    return fitness
-
-
+from scripts.DANN_training import DANN, train_dann_model
 path = ".\GiveMeSomeCredit\cs-training.csv"
 
 X,Y, data  = load_data(path)
+
+# X = X[:65]
+# Y = Y[:65]
+
 n = X.shape[0]
 d = X.shape[1] - 1
 
@@ -50,7 +32,6 @@ baseline_accuracy = ((X.dot(theta_true) > 0)  == Y).mean()
 print('Accuracy: ', baseline_accuracy)
 print('Loss: ', loss_list[-1])
 
-
 # Defining constants 
 num_iters = 10
 eps = 100
@@ -58,37 +39,8 @@ method = "RRM"
 # initial theta
 theta = np.copy(theta_true)
 
-
-# Define genetic algorithm to lern the mappings 
-sol_per_pop = 20
-num_genes = d + 1
-initial_weight_matrix = np.ones((sol_per_pop, d+1))
-fitness_function = fitness_func
-
-
-num_generations = 20
-num_parents_mating = 15
-gene_space = {'low': 0, 'high': 1}
-parent_selection_type = "sss"
-keep_parents = 4
-crossover_type = "single_point"
-mutation_type = "random"
-mutation_percent_genes = 10
-
-ga_instance = pygad.GA(num_generations=num_generations,
-                        num_parents_mating=num_parents_mating,
-                        fitness_func=fitness_function,
-                        num_genes=num_genes,
-                        gene_space=gene_space,
-                        parent_selection_type=parent_selection_type,
-                        keep_parents=keep_parents,
-                        crossover_type=crossover_type,
-                        mutation_type=mutation_type,
-                        mutation_percent_genes=mutation_percent_genes,
-                        save_solutions = True,
-                        initial_population= initial_weight_matrix
-                        )
-
+# Define stuff for training the DANN 
+model = DANN(11, 0.01)
 
 
 X_strat = X
@@ -102,19 +54,13 @@ for t in range(num_iters):
     #eps = np.random.uniform(0,100)
     eps = 50
 
-    if t==1:
-        ga_instance.run()
-        solution, solution_fitness, solution_idx = ga_instance.best_solution()
-
-        ga_instance.plot_fitness()
-
-        print("Parameters of the best solution : {solution}".format(solution=solution))
-        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
-    
     print("t", t, "\n")
     # adjust distribution to current theta
     X_strat = best_response(X_strat, theta, eps, strat_features)
     
+    if t ==0:
+        train_dann_model(model, X, Y, X_strat, Y, num_epochs=10)
+
     # performative loss value of previous theta
     loss_start = evaluate_loss(X_strat, Y, theta, lam, strat_features)
     acc = ((X_strat.dot(theta) > 0) == Y).mean()
@@ -136,16 +82,16 @@ for t in range(num_iters):
     retrained_accuracy.append(acc)
 
     # evalute on new feature representation 
-    if t > 0: 
-        modified_accuracy = calc_accuracy(perform_multiplication(solution, X_strat), Y, theta)
-        print("ACC wth different feature rep", modified_accuracy, "\n")
-        new_rep_accuracy.append(modified_accuracy)
-
+    X_modified = model.transform(X_strat)
+    print("X_modified", X_modified[:5], "X mod shape", X_modified.shape)
+    acc = ((X_modified.dot(theta) > 0) == Y).mean()
+    print("ACC with modified_rep", acc)
+    new_rep_accuracy.append(acc)
 
     #theta = np.copy(theta_new)
         
 
-new_rep_accuracy.insert(0, baseline_accuracy)
+#new_rep_accuracy.insert(0, baseline_accuracy)
 #print("First, retrained, modified", accuracy_list, retrained_accuracy, new_rep_accuracy)
 for elements in zip(accuracy_list, retrained_accuracy, new_rep_accuracy):
     print(*elements)

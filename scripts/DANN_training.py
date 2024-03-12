@@ -4,44 +4,57 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 import tensorflow as tf 
 import numpy as np 
 import keras
-from keras.layers import Conv1D, Dense, Flatten, InputLayer
+from keras.layers import Conv1D, Dense, Flatten, InputLayer, AveragePooling1D, Reshape, BatchNormalization
 from tensorflow.keras import models
+from tensorflow.keras.regularizers import l2
 from sklearn.utils import shuffle
 
 
 class DANN(models.Model):
-    def __init__(self, no_features):
+    def __init__(self, no_features, regularization_coeff=0.01):
         super(DANN, self).__init__()
+        self.regularization_coeff = regularization_coeff
         input_shape = (no_features, 1)
         self.feature_extractor = self.build_feature_extractor(input_shape)[0]
         feature_extractor_output = self.build_feature_extractor(input_shape)[1]
+        print(feature_extractor_output)
         self.label_classifier = self.build_label_classifier(feature_extractor_output)
         self.domain_classifier = self.build_domain_classifier(feature_extractor_output)
 
     
     def build_feature_extractor(self, input_shape):
         model = keras.models.Sequential()
-        model.add(Conv1D(32, kernel_size=5, input_shape = input_shape, activation='relu'))
-        model.add(Conv1D(64, kernel_size=3, activation='relu'))
-        model.add(Conv1D(128, kernel_size=3, activation='relu'))
+        model.add(Conv1D(32, kernel_size=5, input_shape = input_shape, activation='relu', kernel_regularizer=l2(self.regularization_coeff)))
+        model.add(BatchNormalization())
+        model.add(Conv1D(64, kernel_size=4, activation='relu',  kernel_regularizer=l2(self.regularization_coeff)))
+        model.add(BatchNormalization())
+        model.add(Conv1D(128, kernel_size=3, activation='relu',  kernel_regularizer=l2(self.regularization_coeff)))
         model.add(Flatten())
+        model.add(Reshape((model.output_shape[1], 1)))
+        model.add(AveragePooling1D(pool_size=37, strides=20))
+        model.add(Flatten())
+        ### Tune pool_size and strides according to output = (len(flatten) + 1 - pool_size) / stride
         output_shape = model.output_shape[1]
         return model, output_shape
     
     def build_label_classifier(self, input_shape):
         model = tf.keras.Sequential()
         model.add(InputLayer(shape = (input_shape,)))
-        model.add(Dense(2*input_shape))
-        model.add(Dense(64))
-        model.add(Dense(2, activation='softmax'))
+        model.add(Dense(256, kernel_regularizer=l2(self.regularization_coeff)))
+        model.add(Dense(512, kernel_regularizer=l2(self.regularization_coeff)))
+        model.add(Dense(1, activation='sigmoid'))
+        optimizer = tf.keras.optimizers.Adam()
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics = ['accuracy'])
         return model
     
     def build_domain_classifier(self, input_shape):
         model= tf.keras.Sequential()
         model.add(InputLayer(shape = (input_shape,)))
-        model.add(Dense(2*input_shape))
-        model.add(Dense(64))
-        model.add(Dense(2, activation='softmax'))
+        model.add(Dense(64, kernel_regularizer=l2(self.regularization_coeff)))
+        model.add(Dense(128, kernel_regularizer=l2(self.regularization_coeff)))
+        model.add(Dense(1, activation='sigmoid'))
+        optimizer = tf.keras.optimizers.Adam()  # Define optimizer
+        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics = ['accuracy'])  # Compile the model
         return model 
 
     def call(self, inputs, training=None, **kwargs):
@@ -52,8 +65,8 @@ class DANN(models.Model):
         return label_pred, domain_pred
 
 
-def train_dann_model(model, source_data, source_labels, target_data, target_labels, num_epochs=10, batch_size=32, learning_rate=0.001, lambda_value=1.0):
-    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+def train_dann_model(model, source_data, source_labels, target_data, target_labels, num_epochs=10, batch_size=512, learning_rate=1e-5, lambda_value=0.1):
+    optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=1.0)
 
     # Prepare domain labels (0 for source domain, 1 for target domain)
     source_domain_labels = np.zeros((len(source_data), 1))
@@ -71,31 +84,38 @@ def train_dann_model(model, source_data, source_labels, target_data, target_labe
     for epoch in range(num_epochs):
         print(f"Epoch {epoch+1}/{num_epochs}")
         for step in range(0, len(combined_data), batch_size):
+            #print("STEP", step, "/", len(combined_data))
             batch_data = combined_data[step:step+batch_size]
             batch_labels = combined_labels[step:step+batch_size]
             batch_domain_labels = combined_domain_labels[step:step+batch_size]
 
             # Perform forward pass once
-            with tf.GradientTape() as tape:
+            with tf.GradientTape(persistent=True) as tape:
                 features = model.feature_extractor(batch_data, training=True)
+
+                #print("Features", features[:10].numpy())
+
                 label_pred = model.label_classifier(features)
                 domain_pred = model.domain_classifier(features)
 
                 # Compute label loss
-                label_loss = tf.keras.losses.categorical_crossentropy(batch_labels, label_pred)
+                label_loss = tf.keras.losses.binary_crossentropy(batch_labels.reshape(-1,1), label_pred)
 
                 # Compute domain loss
-                domain_loss = tf.keras.losses.categorical_crossentropy(batch_domain_labels, domain_pred)
+                domain_loss = tf.keras.losses.binary_crossentropy(batch_domain_labels.reshape(-1,1), domain_pred)
 
             # Compute gradients for feature extractor with respect to label loss
             feature_gradients_label = tape.gradient(label_loss, model.feature_extractor.trainable_variables)
+
+
+            #print("Gradients label", feature_gradients_label[0][0][0].numpy())
 
             # Compute gradients for feature extractor with respect to domain loss
             feature_gradients_domain = tape.gradient(domain_loss, model.feature_extractor.trainable_variables)
 
             # Update weights for feature extractor
             for i, var in enumerate(model.feature_extractor.trainable_variables):
-                var.assign_sub(feature_gradients_label[i] - lambda_value * feature_gradients_domain[i]) ## CHECK IF LR is needed or not
+                var.assign_sub(learning_rate * (feature_gradients_label[i] - lambda_value * feature_gradients_domain[i])) ## CHECK IF LR is needed or not
 
             # Compute gradients for label classifier
             label_gradients = tape.gradient(label_loss, model.label_classifier.trainable_variables)
@@ -110,8 +130,20 @@ def train_dann_model(model, source_data, source_labels, target_data, target_labe
             model.domain_classifier.optimizer.apply_gradients(zip(domain_gradients, model.domain_classifier.trainable_variables))
             
             # Print training progress
-            print(f"Step {step+1}/{len(combined_data)} - Label Loss: {label_loss}, Domain Loss: {domain_loss}")
+            #print(f"Step {step+1}/{len(combined_data)}")
+            #print(f"Step {step+1}/{len(combined_data)} - Label Loss: {label_loss}, Domain Loss: {domain_loss}")
+        print(f"Label Loss: {np.sum(label_loss)}, Domain Loss: {np.sum(domain_loss)}")
+
+        # Compute accuracy on training set
+        features = model.feature_extractor(combined_data)
+        predicted_class_labels = model.label_classifier(features)
+        predicted_domain_labels = model.label_classifier(features)
+        train_accuracy_class = np.mean((predicted_class_labels > 0.5) == combined_labels)  
+        train_accuracy_domain = np.mean((predicted_domain_labels > 0.5) == combined_domain_labels)  
+        print(f"Training Accuracy:  class - {train_accuracy_class} domain - {train_accuracy_domain}")
 
     print("Training finished.")
 
-x = DANN(11)
+    ## Save the weigths 
+    feature_extractor_weights_path = './feature_extractor_weights.weights.h5'  # Replace 'path_to_save_feature_extractor_weights.h5' with the desired path
+    model.save_weights(feature_extractor_weights_path)
