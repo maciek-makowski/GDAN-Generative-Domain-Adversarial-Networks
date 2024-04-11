@@ -3,6 +3,7 @@ import pygad
 import matplotlib.pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
+from scripts.DANN_training import DANN, train_dann_model
 
 
 def generate_data(parameter_vector, num_samples, mu, covariance_matrix):
@@ -49,29 +50,15 @@ def generate_vector_with_norm(d, norm):
     
     return scaled_vector
 
-def perform_elementwise_multiplication(data, weight_vector):
-    result = np.array([row.T * weight_vector for row in data])
-    return result
-
-def fitness_func(ga_instance, solution, solution_idx):
-    normalized_solution = solution / np.sum(solution)
-
-    modified_data = perform_elementwise_multiplication(X, normalized_solution)
-    modified_predictions = model.predict(modified_data)
-    new_MSE = mean_squared_error(Y, modified_predictions)
-    if new_MSE == mean_squared_error_:
-        fitness = float('inf')
-    else: 
-        fitness = 1.0 / np.abs(new_MSE - mean_squared_error_)
-    return fitness
 ##Define the number of features
-no_features = 10
-## Define starting parameter vector of a model
+no_features = 11
+## Define starting paraeter vector of a model
 theta = np.ones(no_features)
 ## Define the sensitivity parameter 
 epsilon = 0.9
 ## Define the num_samples
 num_samples = 1000
+num_iter = 10
 
 ## Define the linear regression model 
 model = LinearRegression()
@@ -79,61 +66,32 @@ retrained_model = LinearRegression()
 
 mu = generate_vector_with_norm(no_features, epsilon)
 covariance_matrix = generate_covariance_matrix(no_features)
-################### INITIALZING GA ########################################
-sol_per_pop = 40
-num_genes = no_features 
-initial_weight_matrix = np.ones((sol_per_pop, no_features))
-fitness_function = fitness_func
+## Initialize DANN model
+DANN_model = DANN(no_features, task='regression')
 
-
-num_generations = 100
-num_parents_mating = 15
-gene_space = {'low': 0, 'high': 1}
-parent_selection_type = "sss"
-keep_parents = 4
-crossover_type = "single_point"
-mutation_type = "random"
-mutation_percent_genes = 10
-
-ga_instance = pygad.GA(num_generations=num_generations,
-                        num_parents_mating=num_parents_mating,
-                        fitness_func=fitness_function,
-                        num_genes=num_genes,
-                        gene_space=gene_space,
-                        parent_selection_type=parent_selection_type,
-                        keep_parents=keep_parents,
-                        crossover_type=crossover_type,
-                        mutation_type=mutation_type,
-                        mutation_percent_genes=mutation_percent_genes,
-                        save_solutions = True,
-                        initial_population= initial_weight_matrix
-                        )
 
 ## Definition of arrays for plotting 
 best_MSE = []
 best_modified_MSE = []
 best_retrained_MSE = []
 ## The looping proces  
-for i in range(10):
+for i in range(num_iter):
     X,Y = generate_data(theta, num_samples, mu, covariance_matrix)
+
     # print(X,Y)
     if i ==0 :
+        X_prev = X
+        Y_prev = Y 
         model.fit(X,Y)
         y_pred = model.predict(X)
         mean_squared_error_ = mean_squared_error(Y, y_pred)
         print("First MSE ",mean_squared_error_)
     elif i == 1:
-        ga_instance.run()
-        solution, solution_fitness, solution_idx = ga_instance.best_solution()
-
-        ga_instance.plot_fitness()
-
-        print("Parameters of the best solution : {solution}".format(solution=solution))
-        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
-        
+        train_dann_model(DANN_model, X_prev,Y_prev, X,Y, num_epochs=6, data_generator='linreg')
+        DANN_model.load_weights('feature_extractor_weights_linreg.weights.h5')
 
         temp_new_MSE = mean_squared_error(Y, model.predict(X))
-        temp_new_modified_MSE =  mean_squared_error(Y, model.predict(perform_elementwise_multiplication(X, solution)))
+        temp_new_modified_MSE =  mean_squared_error(Y, DANN_model.label_classifier.predict(X))
         print("MSE before modification of the featues", temp_new_MSE)
         print("MSE after modification of the features", temp_new_modified_MSE)
 
@@ -148,7 +106,7 @@ for i in range(10):
         #theta = model.coef_
     else: 
         temp_new_MSE = mean_squared_error(Y, model.predict(X))
-        temp_new_modified_MSE =  mean_squared_error(Y, model.predict(perform_elementwise_multiplication(X, solution)))
+        temp_new_modified_MSE =  mean_squared_error(Y, DANN_model.label_classifier.predict(X))
     
         print("MSE before modification of the featues", temp_new_MSE )
         print("MSE after modification of the features", temp_new_modified_MSE)

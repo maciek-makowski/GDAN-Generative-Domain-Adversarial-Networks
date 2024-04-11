@@ -37,7 +37,7 @@ print('Accuracy: ', baseline_accuracy)
 print('Loss: ', loss_list[-1])
 
 # Defining constants 
-num_iters = 2
+num_iters = 10
 eps = 10
 method = "RRM"
 # initial theta
@@ -132,7 +132,7 @@ plt.axhline(y=baseline_accuracy, color='r', linestyle='--', label='Baseline accu
 # Adding titles for the axes
 plt.xlabel('Iterations of new data being generated')
 plt.ylabel('Accuracy values')
-plt.title(f'Performance on data from Perdomo et al. 2020 Epsilon :{eps}')
+plt.title(f'Performance of DANN transformation on data from Perdomo et al. 2020 Epsilon :{eps}')
 # Adding a legend
 plt.legend()
 
@@ -154,7 +154,7 @@ fig, axs = plt.subplots(1,2, figsize=(10, 10))
 
 axs[0].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
 axs[0].scatter(pca_data['drift'][-1][:,0], pca_data['drift'][-1][:,1], alpha=0.5, label=f'Last iteration drift')
-
+#axs[2].scatter(pca_og[:,0],pca_og[:,1])
 
 axs[1].scatter(pca_data['mod'][0][:,0], pca_data['mod'][0][:,1], alpha=0.5, label=f'First iteration modified')
 axs[1].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
@@ -166,7 +166,7 @@ axs[0].set_ylabel('PCA 2')
 axs[0].set_title(f'Drift effects on the distribution', loc = 'center')
 axs[1].set_xlabel('PCA 1')
 axs[1].set_ylabel('PCA 2')
-axs[1].set_title(f'Transformation effects on the distribution', loc = 'center')
+axs[1].set_title(f'DANN transformation effects on the distribution', loc = 'center')
 axs[0].legend()
 axs[1].legend()
 

@@ -12,15 +12,17 @@ from sklearn.metrics import accuracy_score
 
 
 class DANN(models.Model):
-    def __init__(self, no_features, regularization_coeff=0.01):
+    def __init__(self, no_features, regularization_coeff=0.01, task = 'binary_classification'):
         super(DANN, self).__init__()
         self.regularization_coeff = regularization_coeff
+        self.task = task
         input_shape = (no_features, 1)
         #input_shape = (no_features,)
         self.feature_extractor, feature_extractor_output = self.build_feature_extractor(input_shape)
         print(feature_extractor_output)
         self.label_classifier = self.build_label_classifier(feature_extractor_output)
         self.domain_classifier = self.build_domain_classifier(feature_extractor_output)
+    
 
     
     def build_feature_extractor(self, input_shape):
@@ -46,15 +48,25 @@ class DANN(models.Model):
         return model, output_shape
     
     def build_label_classifier(self, input_shape):
-        model = tf.keras.Sequential()
-        model.add(InputLayer(shape = (input_shape,)))
-        model.add(Dense(256,activation= 'relu')) # kernel_regularizer=l2(self.regularization_coeff)
-        model.add(Dense(512,activation='relu')) # , kernel_regularizer=l2(self.regularization_coeff)
-        model.add(Dense(64,activation='relu'))
-        model.add(Dense(1, activation='sigmoid'))
-        optimizer = tf.keras.optimizers.Adam()
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics = ['accuracy'])
-        model.summary()
+        if self.task == 'binary_classification':
+            model = tf.keras.Sequential()
+            model.add(InputLayer(shape = (input_shape,)))
+            model.add(Dense(256,activation= 'relu')) # kernel_regularizer=l2(self.regularization_coeff)
+            model.add(Dense(512,activation='relu')) # , kernel_regularizer=l2(self.regularization_coeff)
+            model.add(Dense(64,activation='relu'))
+            model.add(Dense(1, activation='sigmoid'))
+            optimizer = tf.keras.optimizers.Adam()
+            model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics = ['accuracy'])
+            model.summary()
+        elif self.task == 'regression':
+            model = tf.keras.Sequential()
+            model.add(InputLayer(shape = (input_shape,)))
+            model.add(Dense(256,activation= 'relu')) # kernel_regularizer=l2(self.regularization_coeff)
+            model.add(Dense(512,activation='relu')) # , kernel_regularizer=l2(self.regularization_coeff)
+            model.add(Dense(64,activation='relu'))
+            model.add(Dense(1, activation='linear'))
+            optimizer = tf.keras.optimizers.Adam()
+            model.compile(optimizer=optimizer, loss='mean_squared_error', metrics = ['mean_squared_error'])
         return model
     
     def build_domain_classifier(self, input_shape):
@@ -120,7 +132,6 @@ def train_dann_model(model, source_data, source_labels, target_data, target_labe
 
                # Compute label loss
                 label_loss = tf.keras.losses.binary_crossentropy(batch_labels.reshape(-1,1), label_pred)
-
                 # Compute domain loss
                 domain_loss = tf.keras.losses.binary_crossentropy(batch_domain_labels.reshape(-1,1), domain_pred)
                 
@@ -155,8 +166,9 @@ def train_dann_model(model, source_data, source_labels, target_data, target_labe
         features = model.feature_extractor(combined_data)
         predicted_class_labels = model.label_classifier(features)
         predicted_domain_labels = model.domain_classifier(features)
-
-        train_accuracy_class = np.mean((predicted_class_labels > 0.5) == combined_labels)  
+        train_accuracy_class = np.mean((predicted_class_labels > 0.5) == combined_labels) 
+        train_accuracy_class = np.mean((predicted_class_labels > 0.5) == combined_labels) 
+            
         train_accuracy_domain = np.mean((predicted_domain_labels > 0.5) == combined_domain_labels)  
         print(f"Training Accuracy:  class - {train_accuracy_class} domain - {train_accuracy_domain}")
         #print("Shape class", predicted_class_labels.shape , "shape domain", predicted_domain_labels.shape)

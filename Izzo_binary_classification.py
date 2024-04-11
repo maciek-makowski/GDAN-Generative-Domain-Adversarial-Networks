@@ -121,7 +121,7 @@ plt.axhline(y=baseline_accuracy, color='r', linestyle='--', label='Baseline accu
 # Adding titles for the axes
 plt.xlabel('Iterations of new data being generated')
 plt.ylabel('Accuracy values')
-plt.title('Performance with generation of a linear transformation on data from Izzo et al. 2022')
+plt.title('Performance with generation of a DANN transformation on data from Izzo et al. 2022')
 # Adding a legend
 plt.legend()
 
@@ -155,10 +155,10 @@ axs[0].set_ylabel('PCA 2')
 axs[0].set_title(f'Drift effects on the distribution', loc = 'center')
 axs[1].set_xlabel('PCA 1')
 axs[1].set_ylabel('PCA 2')
-axs[1].set_title(f'Transformation effects on the distribution', loc = 'center')
+axs[1].set_title(f'DANN transformation effects on the distribution', loc = 'center')
 axs[0].legend()
 axs[1].legend()
 
-plt.suptitle("Principal component analysis - data Perdomo 2020")
+plt.suptitle("Principal component analysis - data Izzo 2022")
 plt.tight_layout()
 plt.show()
