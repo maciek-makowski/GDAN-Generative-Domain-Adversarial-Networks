@@ -143,7 +143,7 @@ fig, axs = plt.subplots(1,2, figsize=(10, 10))
 
 axs[0].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
 axs[0].scatter(pca_data['drift'][-1][:,0], pca_data['drift'][-1][:,1], alpha=0.5, label=f'Last iteration drift')
-
+axs[0].scatter(pca_og[:,0], pca_og[:,1], alpha = 0.5, label = f'Original data distribution')
 
 axs[1].scatter(pca_data['mod'][0][:,0], pca_data['mod'][0][:,1], alpha=0.5, label=f'First iteration modified')
 axs[1].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
