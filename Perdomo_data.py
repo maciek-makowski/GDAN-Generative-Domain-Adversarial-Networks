@@ -5,7 +5,7 @@ from scripts.optimization import logistic_regression, evaluate_loss
 from scripts.strategic import best_response
 from scripts.DANN_training import DANN, train_dann_model
 from sklearn.metrics import accuracy_score
-from adapt.feature_based import TCA
+from sklearn.decomposition import PCA
 
 
 
@@ -37,8 +37,8 @@ print('Accuracy: ', baseline_accuracy)
 print('Loss: ', loss_list[-1])
 
 # Defining constants 
-num_iters = 85
-eps = 100
+num_iters = 2
+eps = 10
 method = "RRM"
 # initial theta
 theta = np.copy(theta_true)
@@ -55,13 +55,18 @@ retrained_accuracy = []
 new_rep_accuracy = []
 new_model_accuracy = []
 
+#Define lists for PCA plotting
+X_modified_list = []
+X_drifted_list = []
+
 for t in range(num_iters):
     #eps = np.random.uniform(0,100)
-    eps = 10
 
     print("t", t, "\n")
     # adjust distribution to current theta
     X_strat = best_response(X_strat, theta, eps, strat_features)
+    X_strat_scaled = (X_strat - np.mean(X_strat)) / np.std(X_strat)
+    X_drifted_list.append(X_strat_scaled)
     
     if t ==0:
         #train_dann_model(model, X, Y, X_strat, Y, num_epochs=6)
@@ -89,7 +94,10 @@ for t in range(num_iters):
 
     # evalute on new feature representation 
     X_modified = model.feature_extractor(X_strat)
-    #print("X_modififed_before", X_strat[:5])
+    
+    X_modified_scaled = (X_modified - np.mean(X_modified, axis = 0))/np.std(X_modified, axis = 0)
+    X_modified_list.append(X_modified_scaled)
+
     X_modified = model.feature_extractor.predict(X_strat)
     #print("X_modified", X_modified[:5], "X mod shape", X_modified.shape)
     acc = ((X_modified.dot(theta) > 0) == Y).mean()
@@ -132,4 +140,36 @@ plt.legend()
 plt.grid(True)
 
 # Displaying the plot
+plt.show()
+
+pca = PCA(n_components=2)
+pca_data = {"mod":[],"drift":[]}
+for i in range(len(X_modified_list)):
+    pca_data['mod'].append(pca.fit_transform(X_modified_list[i]))
+    pca_data['drift'].append(pca.fit_transform(X_drifted_list[i]))
+
+pca_og = pca.fit_transform(X)
+
+fig, axs = plt.subplots(1,2, figsize=(10, 10))
+
+axs[0].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
+axs[0].scatter(pca_data['drift'][-1][:,0], pca_data['drift'][-1][:,1], alpha=0.5, label=f'Last iteration drift')
+
+
+axs[1].scatter(pca_data['mod'][0][:,0], pca_data['mod'][0][:,1], alpha=0.5, label=f'First iteration modified')
+axs[1].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
+#axs[1].scatter(pca.fit_transform(X)[:,0], pca.fit_transform(X)[:,1], alpha=0.5, label=f'Distribution og')
+
+
+axs[0].set_xlabel('PCA 1')
+axs[0].set_ylabel('PCA 2')
+axs[0].set_title(f'Drift effects on the distribution', loc = 'center')
+axs[1].set_xlabel('PCA 1')
+axs[1].set_ylabel('PCA 2')
+axs[1].set_title(f'Transformation effects on the distribution', loc = 'center')
+axs[0].legend()
+axs[1].legend()
+
+plt.suptitle("Principal component analysis - data Perdomo 2020")
+plt.tight_layout()
 plt.show()
