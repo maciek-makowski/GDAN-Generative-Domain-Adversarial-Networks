@@ -80,7 +80,7 @@ class DANN(models.Model):
         return label_pred, domain_pred
 
 
-def train_dann_model(model, source_data, source_labels, target_data, target_labels, num_epochs=10, batch_size=512, learning_rate=1e-5, lambda_value=0.1):
+def train_dann_model(model, source_data, source_labels, target_data, target_labels, num_epochs=10, batch_size=512, learning_rate=1e-5, lambda_value=0.1, data_generator = "Perdomo"):
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate, clipnorm=1.0)
 
     # Prepare domain labels (0 for source domain, 1 for target domain)
@@ -168,7 +168,7 @@ def train_dann_model(model, source_data, source_labels, target_data, target_labe
         if domain_acc > previous_domain_acc:
             ## Save the weigths 
             previous_domain_acc = domain_acc
-            feature_extractor_weights_path = './feature_extractor_weights.weights.h5'  # Replace 'path_to_save_feature_extractor_weights.h5' with the desired path
+            feature_extractor_weights_path = f'./feature_extractor_weights_{data_generator}.weights.h5' 
             model.save_weights(feature_extractor_weights_path)
 
     print("Training finished.")

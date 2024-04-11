@@ -6,34 +6,25 @@ from scripts.Izzo_utils import shift_dist, fit
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score
-
-
-def fitness_func(ga_instance, solution, solution_idx):
-    normalized_solution = solution / np.sum(solution)
-
-    modified_features = ([row.T * normalized_solution for row in X]) 
-    accuracy = accuracy_score(Y, model.predict(modified_features))
-    if baseline_accuracy - accuracy == 0:
-        fitness = float('inf')
-    else: 
-        fitness = (1.0 / np.abs(baseline_accuracy - accuracy)) + (1.0/(1.0 - np.sum(solution)))
-    return fitness
+from scripts.DANN_training import DANN, train_dann_model
+from sklearn.decomposition import PCA
 
 
 num_iters = 10
 no_samples = 10000
-no_features = 2
-
+no_features = 11
+strat_features = np.ones(no_features)
 #theta = np.random.randn(no_features)
-theta = [0,0]
+theta = np.ones(no_features)
 print(theta)
 
 ### Try to specify the models better, cause there is divergence in accuracies between methods
 model = LogisticRegression(C = 0.01, penalty='l2')
 retrained_model = LogisticRegression(C = 0.01, penalty='l2')
+DANN_model = DANN(11, 0.01)
 
-X,Y = shift_dist(no_samples, theta)
-
+X,Y = shift_dist(no_samples, theta, no_features, strat_features)
+X_og = X
 # ## Grid search resulted in l2 and 0.001 for C you can do it more extensively later
 # param_grid = {
 #     'C': [0.001, 0.01, 0.1, 0.5, 1.0],  # Regularization parameter
@@ -65,72 +56,54 @@ print("Baseline accuracy",baseline_accuracy)
 
 new_theta = theta.copy()
 
-# Define genetic algorithm to lern the mappings 
-sol_per_pop = 40
-num_genes = no_features
-initial_weight_matrix = np.ones((sol_per_pop, no_features))
-fitness_function = fitness_func
-
-
-num_generations = 40
-num_parents_mating = 15
-gene_space = {'low': 0, 'high': 1}
-parent_selection_type = "sss"
-keep_parents = 4
-crossover_type = "single_point"
-mutation_type = "random"
-mutation_percent_genes = 20
-
-ga_instance = pygad.GA(num_generations=num_generations,
-                        num_parents_mating=num_parents_mating,
-                        fitness_func=fitness_function,
-                        num_genes=num_genes,
-                        gene_space=gene_space,
-                        parent_selection_type=parent_selection_type,
-                        keep_parents=keep_parents,
-                        crossover_type=crossover_type,
-                        mutation_type=mutation_type,
-                        mutation_percent_genes=mutation_percent_genes,
-                        save_solutions = True,
-                        initial_population= initial_weight_matrix
-                        )
-
-
 # Lists for plotting
 regular_accuracies = []
 retrained_accuracies = []
 new_rep_accuracies = []
+new_rep_DANN_model = []
+
+# Lists for PCA plotting
+X_modified_list = []
+X_drifted_list = []
 
 for t in range(num_iters):
     old_accuracy = accuracy_score(Y, model.predict(X))
     regular_accuracies.append(old_accuracy)
     print("accuracy with old model", old_accuracy)
 
+    X_prev = X
+    Y_prev = Y
+
+    X,Y = shift_dist(no_samples, theta, no_features, strat_features)
+    retrained_model.fit(X,Y)
+
+    X_drift_scaled = (X - np.mean(X, axis = 0)) / np.std(X, axis=0)
+    X_drifted_list.append(X_drift_scaled)
 
     if t == 0:
-        ga_instance.run()
-        solution, solution_fitness, solution_idx = ga_instance.best_solution()
+        #train_dann_model(DANN_model, X_prev, Y_prev, X, Y, num_epochs=6, data_generator="Izzo")
+        DANN_model.load_weights('feature_extractor_weights_Izzo.weights.h5')
+        
 
-        ga_instance.plot_fitness()
-
-
-        print("Parameters of the best solution : {solution}".format(solution=solution))
-        print("Fitness value of the best solution = {solution_fitness}".format(solution_fitness=solution_fitness))
-
-    X,Y = shift_dist(no_samples, theta)
-    retrained_model.fit(X,Y)
+  
 
     retrained_accuracy = accuracy_score(Y, retrained_model.predict(X))
     retrained_accuracies.append(retrained_accuracy)
     print("accuracy after retraining", retrained_accuracy)
     
-    modified_X = np.array([solution * x for x in X])
-    print("X", X[0:2,:])
-    print("Modified X", modified_X[0:2,:])
+    modified_X = DANN_model.feature_extractor.predict(X)
+    
+    X_modified_scaled = (modified_X - np.mean(modified_X, axis = 0))/np.std(modified_X, axis = 0)
+    X_modified_list.append(X_modified_scaled)
 
     new_rep_accuracy = accuracy_score(Y, model.predict(modified_X))
     new_rep_accuracies.append(new_rep_accuracy)
     print("accuracy with new representation", new_rep_accuracy)
+
+    predictions_DANN_model = np.where(DANN_model.label_classifier.predict(modified_X) > 0.5, 1,0)
+    acc = accuracy_score(Y, predictions_DANN_model)
+    new_rep_DANN_model.append(acc)
+    print("accuracy new rep DANN model",acc)
 
     
 
@@ -139,6 +112,7 @@ for t in range(num_iters):
 plt.plot(regular_accuracies, label='Accuracy with first model')
 plt.plot(retrained_accuracies, label='Retrained accuracy')
 plt.plot(new_rep_accuracies, label = 'Accuracy with modified representation')
+plt.plot(new_rep_DANN_model, label = 'Accuracies with DANN model')
 
 
 # Adding a horizontal line
@@ -155,4 +129,36 @@ plt.legend()
 plt.grid(True)
 
 # Displaying the plot
+plt.show()
+
+pca = PCA(n_components=2)
+pca_data = {"mod":[],"drift":[]}
+for i in range(len(X_modified_list)):
+    pca_data['mod'].append(pca.fit_transform(X_modified_list[i]))
+    pca_data['drift'].append(pca.fit_transform(X_drifted_list[i]))
+
+pca_og = pca.fit_transform(X_og)
+
+fig, axs = plt.subplots(1,2, figsize=(10, 10))
+
+axs[0].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
+axs[0].scatter(pca_data['drift'][-1][:,0], pca_data['drift'][-1][:,1], alpha=0.5, label=f'Last iteration drift')
+
+
+axs[1].scatter(pca_data['mod'][0][:,0], pca_data['mod'][0][:,1], alpha=0.5, label=f'First iteration modified')
+axs[1].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
+#axs[1].scatter(pca.fit_transform(X)[:,0], pca.fit_transform(X)[:,1], alpha=0.5, label=f'Distribution og')
+
+
+axs[0].set_xlabel('PCA 1')
+axs[0].set_ylabel('PCA 2')
+axs[0].set_title(f'Drift effects on the distribution', loc = 'center')
+axs[1].set_xlabel('PCA 1')
+axs[1].set_ylabel('PCA 2')
+axs[1].set_title(f'Transformation effects on the distribution', loc = 'center')
+axs[0].legend()
+axs[1].legend()
+
+plt.suptitle("Principal component analysis - data Perdomo 2020")
+plt.tight_layout()
 plt.show()

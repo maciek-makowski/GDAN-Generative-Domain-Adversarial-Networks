@@ -15,23 +15,23 @@ reg = 1e-2
 def mean0(theta):
     return mu0
 
-def mean1(theta):
-    return mu1 - eps * theta[1]
+def mean1(theta, strat_features, feature_index):
+    return mu1 - eps * theta[feature_index] * strat_features[feature_index]
 
-def shift_dist(n, theta):
-    X = np.ones((n, 2))
+
+def shift_dist(n, theta, no_features, strat_features):
+    X = np.ones((n, no_features))
     Y = np.ones(n)
     for i in range(n):
         if np.random.rand() <= g:
-            X[i, 0] = s1 * np.random.randn() + mean1(theta)
-            X[i, 1] = s1 * np.random.randn() + mean1(theta)
+            for j in range(no_features):           
+                X[i, j] = s1 * np.random.randn() + mean1(theta, strat_features, j)
             Y[i] = 1
         else:
-            X[i, 0] = s0 * np.random.randn() + mean0(theta)
-            X[i, 1] = s0 * np.random.randn() + mean0(theta)
+            for j in range(no_features):
+                X[i, j] = s0 * np.random.randn() + mean0(theta)
             Y[i] = 0
     return X, Y
-
 ## Functions for fitting logistic regression 
 def h(x, theta):
     """
