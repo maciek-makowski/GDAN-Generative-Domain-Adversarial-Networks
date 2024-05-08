@@ -7,8 +7,6 @@ from scripts.DANN_training import DANN, train_dann_model
 from sklearn.metrics import accuracy_score
 from sklearn.decomposition import PCA
 
-
-
 path = ".\GiveMeSomeCredit\cs-training.csv"
 
 X,Y, data  = load_data(path)
@@ -22,22 +20,14 @@ d = X.shape[1] - 1
 
 strat_features = np.array([1, 6, 8]) - 1 # for later indexings
 
-# Description of the strategic features 
-# print('Strategic Features: \n')
-# for i, feature in enumerate(strat_features):
-#     print(i, data.columns[feature + 1])
-
 # fit logistic regression model we treat as the truth
 lam = 1.0/n
 theta_true, loss_list, smoothness = logistic_regression(X, Y, lam, 'Exact')
 
 baseline_accuracy = ((X.dot(theta_true) > 0)  == Y).mean()
 
-print('Accuracy: ', baseline_accuracy)
-print('Loss: ', loss_list[-1])
-
 # Defining constants 
-num_iters = 10
+num_iters = 5
 eps = 10
 method = "RRM"
 # initial theta
@@ -45,7 +35,6 @@ theta = np.copy(theta_true)
 
 # Define stuff for training the DANN 
 model = DANN(11, 0.01)
-
 
 X_strat = X
 
@@ -60,8 +49,6 @@ X_modified_list = []
 X_drifted_list = []
 
 for t in range(num_iters):
-    #eps = np.random.uniform(0,100)
-
     print("t", t, "\n")
     # adjust distribution to current theta
     X_strat = best_response(X_strat, theta, eps, strat_features)
