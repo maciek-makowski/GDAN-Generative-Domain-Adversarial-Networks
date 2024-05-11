@@ -3,6 +3,7 @@ os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 import tensorflow as tf 
 import numpy as np 
+import sys
 import keras
 from keras.models import Model
 from keras.optimizers import Adam
@@ -12,23 +13,25 @@ from keras.layers import Input, Embedding, LeakyReLU, Conv2D, Conv2DTranspose, A
 from tensorflow.keras import models
 from sklearn.utils import shuffle
 from sklearn.metrics import accuracy_score
+from keras.utils import plot_model
 
 
 class GDANN(models.Model):
-    def __init__(self, no_features, regularization_coeff=0.01, task = 'binary_classification'):
+    def __init__(self, no_features, no_domain_classes = 5, task = 'binary_classification'):
         super(GDANN, self).__init__()
-        self.regularization_coeff = regularization_coeff
         self.task = task
         self.no_features = no_features
         input_shape = (no_features, 1)
         #input_shape = (no_features,)
         self.feature_extractor, feature_extractor_output = self.build_feature_extractor(input_shape)
-        print(feature_extractor_output)
+        # print(feature_extractor_output)
         self.label_classifier = self.build_label_classifier(feature_extractor_output)
-        self.define_generator = self.build_generator(feature_extractor_output)
-        self.domain_classifier = self.build_domain_discriminator(data_shape=feature_extractor_output)
-    
+        self.discriminator = self.build_domain_discriminator(data_shape=(feature_extractor_output,1), n_classes=no_domain_classes)
+        self.generator = self.build_generator(input_shape=(feature_extractor_output,1), n_classes= no_domain_classes)
+        self.gan_model = self.build_gan(self.generator, self.discriminator, data_shape = (feature_extractor_output,1))
+        
 
+       
     
     def build_feature_extractor(self, input_shape):
         model = keras.models.Sequential()
@@ -39,17 +42,18 @@ class GDANN(models.Model):
         model.add(BatchNormalization())
         model.add(Conv1D(32, kernel_size=6, strides=14, activation='relu'))
         model.add(Flatten())
-        model.add(Reshape((model.output_shape[1], 1)))
+        model.add(Reshape((256, 1)))
         model.add(AveragePooling1D(pool_size=37, strides=20))
         #model.add(MaxPooling1D(pool_size=37, strides=20))
         model.add(Flatten())
         model.add(Dense(11, input_shape = input_shape))
         model.add(Normalization(mean = np.zeros(11), variance= np.ones(11)))
-        model.summary()
+        #model.summary()
         optimizer = tf.keras.optimizers.Adam()
         model.compile(optimizer=optimizer)
         ### Tune pool_size and strides according to output = (len(flatten) + 1 - pool_size) / stride
         output_shape = model.output_shape[1]
+        plot_model(model, to_file='feature_extractor.png', show_shapes=True, show_layer_names=True)
         return model, output_shape
     
     def build_label_classifier(self, input_shape):
@@ -62,23 +66,8 @@ class GDANN(models.Model):
             model.add(Dense(1, activation='sigmoid'))
             optimizer = tf.keras.optimizers.Adam()
             model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics = ['accuracy'])
-            model.summary()
+            #model.summary()
         return model
-    
-    def build_domain_classifier(self, input_shape):
-        model= tf.keras.Sequential()
-        model.add(InputLayer(shape = (input_shape,)))
-        model.add(Dense(512, activation='relu')) # kernel_regularizer=l2(self.regularization_coeff)
-        model.add(BatchNormalization())
-        model.add(Dense(1024, activation='relu'))# kernel_regularizer=l2(self.regularization_coeff)
-        model.add(Dropout(0.25))
-        model.add(Dense(512, activation='relu'))
-        model.add(Dropout(0.25))
-        model.add(Dense(128, activation='relu'))
-        model.add(Dense(1, activation='sigmoid'))
-        optimizer = tf.keras.optimizers.Adam()  # Define optimizer
-        model.compile(optimizer=optimizer, loss='binary_crossentropy', metrics = ['accuracy'])  # Compile the model
-        return model 
     
     def build_domain_discriminator(self, data_shape = (11,1), n_classes = 10):
         # generic features extracted representation always real 
@@ -94,19 +83,23 @@ class GDANN(models.Model):
         disc = Dropout(0.25)(disc)
         disc = Dense(128, activation='relu')(disc)
         #real/fake output
-        out1 = Dense(1, activation='sigmoid')(disc)
+        disc = Flatten()(disc)
+        out1 = Dense(1, activation='sigmoid', name = 'real_fake')(disc)
         #class label output 
-        out2 = Dense(n_classes, activation='softmax')(disc)
+        out2 = Dense(n_classes, activation='softmax', name = 'category')(disc)
         # define model
         model = Model([in_src_dist, in_target_dist], [out1, out2])
         # compile model
-        opt = Adam(lr=0.0002, beta_1=0.5)
-        model.compile(loss=['binary_crossentropy', 'sparse_categorical_crossentropy'], optimizer=opt)
+        opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        #model.summary()
+        model.compile(
+            loss ={'real_fake':'binary_crossentropy', 'category':'sparse_categorical_crossentropy'},
+            optimizer=opt, metrics = ['accuracy', 'accuracy'])
+        
+        plot_model(model, to_file='discriminator.png', show_shapes=True, show_layer_names=True)
         return model
 
-        
-
-    def build_generator(self, latent_dim, n_classes=10):
+    def build_generator(self, input_shape, n_classes=10):
         # weight initialization
         init = RandomNormal(stddev=0.02)
         # label input
@@ -117,48 +110,61 @@ class GDANN(models.Model):
         n_nodes = self.no_features
         li = Dense(n_nodes, kernel_initializer=init)(li)
         # treat one datapoint as an additional feature map of size no_featurex1x1
-        li = Reshape((self.no_features, 1, 1))(li)
+        li = Reshape((self.no_features,1))(li)
         # image generator input
-        in_datapoint = Input(shape=(latent_dim,))
+        in_datapoint = Input(shape=input_shape)
         # foundation for a 11x1 datapoint, first no is number of feature maps
-        n_nodes = 63 * self.no_features * 1
+        n_nodes = 64 
         gen = Dense(n_nodes, kernel_initializer=init)(in_datapoint)
-        gen = Activation('relu')(gen)
-        gen = Reshape((self.no_features, 1, 63))(gen)
+        #gen = Activation('relu')(gen)
+        gen = LeakyReLU()(gen)
+        gen = Flatten()(gen)
+        gen = Reshape((self.no_features,64))(gen)
         # merge image gen and label input
         merge = Concatenate()([gen, li])
         ## The output shape of merge should be 11x1x64 now upsample 11 and then downsample back to 11
         ## Here you need to do the encoding decoding from pix2pix
-        gen = Conv1DTranspose(128, kernel_size=6, strides=2, activation='relu')(merge)
+        gen = Conv1DTranspose(128, kernel_size=6, strides=2)(merge)
+        gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
-        gen = Conv1DTranspose(256, kernel_size=8, strides=4, activation='relu')(gen)
+        gen = Conv1DTranspose(256, kernel_size=8, strides=4)(gen)
+        gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
-        gen = Conv1D(256, kernel_size = 10, strides=2, activation='relu')(gen)
-        gen = Conv1D(128, kernel_size = 4, strides=2, activation='relu')(gen)
+        gen = Conv1D(256, kernel_size = 10, strides=2)(gen)
+        gen = LeakyReLU()(gen)
+        gen = BatchNormalization()(gen)
+        gen = Conv1D(128, kernel_size = 4, strides=2)(gen)
+        gen = LeakyReLU()(gen)
+        gen = BatchNormalization()(gen)
         gen = Flatten()(gen)
         gen = Dense(11)(gen)
         out_layer = Activation('sigmoid')(gen)
         # define model
         model = Model([in_datapoint, in_label], out_layer)
+        # opt = Adam(learning_rate=0.0002, beta_1=0.5)
+        # model.compile(
+        #     loss =['mae'],
+        #     optimizer=opt)
+        # #model.summary()
+        # plot_model(model, to_file='generator.png', show_shapes=True, show_layer_names=True)
         return model
     
-    def define_gan(g_model, d_model, data_shape):
-        # make weights in the discriminator not trainable
-        for layer in d_model.layers:
-            if not isinstance(layer, BatchNormalization):
-                layer.trainable = False
-
+    def build_gan(self, g_model, d_model, data_shape):
+               
         # define the source image
         in_src = Input(shape=data_shape)
+        #define class 
+        in_class = Input(shape = (1,))
         # connect the source image to the generator input
-        gen_out = g_model(in_src)
+        gen_out = g_model([in_src, in_class])
         # connect the source input and generator output to the discriminator input
-        dis_out = d_model([in_src, gen_out])
+        dis_output = d_model([gen_out, in_src])
         # define gan model as taking noise and label and outputting real/fake and label outputs
-        model = Model(in_src, [dis_out, gen_out])
+        model = Model(inputs = [in_src ,in_class], outputs = [dis_output[0], dis_output[1], gen_out])
         # compile model
-        opt = Adam(lr=0.0002, beta_1=0.5)
+        opt = Adam(learning_rate=0.0002)
         model.compile(loss=['binary_crossentropy','sparse_categorical_crossentropy','mae'], optimizer=opt)
+        #plot_model(model, to_file='GAN.png', show_shapes=True, show_layer_names=True)
         return model
 
 
@@ -257,56 +263,125 @@ def train_dann_model(model, source_data, source_labels, target_data, target_labe
 
 
 # select real samples
-def generate_real_samples(dataset, map_of_idx_to_og, labels, n_samples):
+def generate_real_samples(dataset, first_dist, len_single_domain, c_labels, d_labels, n_samples):
     # Generate random indices
-    random_indices = np.random.sample(range(len(dataset)), n_samples)
-    datapoints = [dataset[idx] for idx in random_indices]
-    # Select corresponding points from the original distribution in t0
-    original_datapoints = []
-    for idx in random_indices:
-        original_dataset_index = map_of_idx_to_og[idx]
-        original_datapoints.extend(dataset[original_dataset_index[0]][original_dataset_index[1]])
-   
-    return datapoints, original_datapoints 
-    
-def train_architecture(model, data, labels, num_epochs = 10, batch_size = 512):
-    # Concatenate all inner lists into one big list for data and labels
-    concatenated_data = [item for sublist in data for item in sublist]
-    concatenated_labels = [item for sublist in labels for item in sublist] 
-    
-    # Create a corresponding list of labels
-    concatenated_domain_labels = []
-    # Create a mapping to track original instance indices
-    original_instance_mapping = []
+    random_indices = np.random.choice(range(len(dataset)), n_samples)
+    datapoints = np.array([dataset[idx] for idx in random_indices])
+    #Find corresponding indices in the original dataset
+    og_indices = random_indices % len_single_domain
+    original_datapoints = first_dist[og_indices]
+    # Same for class and domain labels 
+    class_labels = np.array([c_labels[idx] for idx in random_indices])
+    domain_labels = np.array([d_labels[idx] for idx in random_indices])
 
-    for i, sublist in enumerate(data):
-        original_instance_mapping.extend([(i, j) for j in range(len(sublist))])
-        concatenated_domain_labels.extend([i] * len(sublist))
+    return datapoints, original_datapoints, class_labels, domain_labels
 
-    # combined_data, combined_class_labels, combined_domain_labels = shuffle(concatenated_data, concatenated_labels, concatenated_domain_labels)
-    # No shuffling for now as you need to be able to map one point from dist t=0 to its version in t1, t2 and so on 
-    combined_data, combined_class_labels, combined_domain_labels = shuffle(concatenated_data, concatenated_labels, concatenated_domain_labels)
+    
+def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 0.1,  num_epochs = 2, batch_size = 512):
+    domain_labels = []
+    len_single_domain = len(data[0])
+    for i, datapoints in enumerate(data):
+        domain_labels.extend([i] * len(datapoints))
+    
+    combined_domain_labels = np.array(domain_labels)   
+    combined_data = np.concatenate(data)
+    combined_class_labels = np.concatenate(labels) 
     
     #calculate the number of batches per training epoch
-    bat_per_epo = int(combined_data.shape[0] / batch_size)
+    bat_per_epo = int(len(combined_data) / batch_size)
 	# calculate the number of training iterations
     n_steps = bat_per_epo * num_epochs
 	# calculate the size of half a batch of samples
     half_batch = int(batch_size / 2)
 	# manually enumerate epochs
     for i in range(n_steps):
-		# get randomly selected 'real' samples
-        [X_real, labels_real], y_real = generate_real_samples(dataset, half_batch)
-		# update discriminator model weights
-        _,d_r1,d_r2 = d_model.train_on_batch(X_real, [y_real, labels_real])
-		# generate 'fake' examples
-        [X_fake, labels_fake], y_fake = generate_fake_samples(g_model, latent_dim, half_batch)
-		# update discriminator model weights
-        _,d_f,d_f2 = d_model.train_on_batch(X_fake, [y_fake, labels_fake])
-		# prepare points in latent space as input for the generator
-        [z_input, z_labels] = generate_latent_points(latent_dim, n_batch)
-		# create inverted labels for the fake samples
-        y_gan = ones((n_batch, 1))
-		# update the generator via the discriminator's error
-        _,g_1,g_2 = gan_model.train_on_batch([z_input, z_labels], [y_gan, z_labels])
+        print(f"Step no {i}/{n_steps}")
+        # get randomly selected 'real' samples
+        datapoints, original_points,class_labels, domain_labels  = generate_real_samples(combined_data,first_dist, len_single_domain, combined_class_labels, combined_domain_labels, half_batch)
+        #datapoints, original_points, class_labels, domain_labels = shuffle(datapoints, original_points, class_labels, domain_labels)
+
+        with tf.GradientTape() as feature_extractor_tape, tf.GradientTape() as label_classifier_tape: 
+            # Pass forward through the discriminator
+            with tf.GradientTape() as discriminator_tape: 
+                for layer in model.discriminator.layers:
+                    if not isinstance(layer, BatchNormalization):
+                        layer.trainable = True
+
+                domain_labels_tensor = tf.convert_to_tensor(domain_labels)
+                
+                #Train discriminator on real distributions
+                discriminator_output = model.discriminator([original_points, datapoints])
+                real_fake_loss_real = tf.reduce_mean(tf.keras.losses.binary_crossentropy(tf.ones_like(discriminator_output[0]), discriminator_output[0]))
+                category_loss_real = tf.reduce_mean(tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output[1]))
+            
+                #Train discriminator on generated distributions
+                features = model.feature_extractor(datapoints)
+                generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
+                discriminator_output_fake = model.discriminator([generated_t0, tf.convert_to_tensor(datapoints)])
+                real_fake_loss_fake = tf.reduce_mean(tf.keras.losses.binary_crossentropy(tf.zeros_like(discriminator_output_fake[0]), discriminator_output_fake[0]))
+                category_loss_fake = tf.reduce_mean(tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output_fake[1]))
+                
+                discriminators_loss = real_fake_loss_real + category_loss_real + real_fake_loss_fake + category_loss_fake
+            
+            
+            discriminators_trainable_vars = model.discriminator.trainable_variables
+            grads = discriminator_tape.gradient(discriminators_loss, discriminators_trainable_vars)
+            model.discriminator.optimizer.apply_gradients(zip(grads, discriminators_trainable_vars))
+            
+            #Pass forward through the generator
+            with tf.GradientTape() as generator_tape: 
+
+                for layer in model.discriminator.layers:
+                    layer.trainable = False
+                
+                generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
+                discriminator_output = model.discriminator([generated_t0, tf.convert_to_tensor(datapoints)])
+                generator_real_fake_loss = tf.reduce_mean(tf.keras.losses.binary_crossentropy(tf.ones_like(discriminator_output[0]), discriminator_output[0]))
+                #mae_between_distributions = np.mean(np.abs(original_points - generated_t0), axis = 1)
+                mae_between_distributions = tf.reduce_mean(tf.abs(original_points - generated_t0), axis=1)
+                generator_loss = real_fake_loss_real + category_loss_real + generator_real_fake_loss + category_loss_fake + lam * mae_between_distributions 
+
+            
+            generator_trainable_vars = model.gan_model.trainable_variables
+            grads = generator_tape.gradient(generator_loss, generator_trainable_vars)
+            model.gan_model.optimizer.apply_gradients(zip(grads, generator_trainable_vars))
+
+            label_pred = model.label_classifier(features)
+            predicted_class_labels = tf.cast(label_pred >= 0.5, tf.int32)
+            print("Label_pred", predicted_class_labels[:5])
+            label_loss = tf.keras.losses.binary_crossentropy(class_labels.reshape(-1,1), predicted_class_labels)
+            encoder_loss = label_loss - lambda_2 * (category_loss_real + category_loss_fake)
+         
+        # Compute gradients
+        trainable_vars_enc = model.feature_extractor.trainable_variables
+        trainable_vars_task = model.label_classifier.trainable_variables
+        
+        gradients_label_classifier = label_classifier_tape.gradient(label_loss, trainable_vars_task)
+        gradients_feature_extractor = feature_extractor_tape.gradient(encoder_loss, trainable_vars_enc)
+
+        
+        # Update weights
+        model.label_classifier.optimizer.apply_gradients(zip(gradients_label_classifier, trainable_vars_task))
+        model.feature_extractor.optimizer.apply_gradients(zip(gradients_feature_extractor, trainable_vars_enc))
+        #PRINT THE LOSSES 
+        print("Discriminator loss", discriminators_loss)
+        print("Generator loss", generator_loss)
+        print("Feature extractor loss", encoder_loss)
+        print("Label loss", label_loss)
+
+
+
+        #Compute the accuracies on the training set 
+        # Compute accuracy on training set
+        if i % 5 == 0:
+            features = model.feature_extractor(combined_data)
+            predicted_class_labels_probabilities = model.label_classifier(features)
+            predicted_class_labels = tf.cast(predicted_class_labels_probabilities >= 0.5, tf.int32)
+            # print("combined_class_lab", combined_class_labels[:5])
+            # print("predicted_class_lab", predicted_class_labels[:5])
+            train_accuracy_class = accuracy_score(combined_class_labels, predicted_class_labels) 
+            print(f"Training Accuracy:  class - {train_accuracy_class}")
+
+    print("Training finished.")
+
         

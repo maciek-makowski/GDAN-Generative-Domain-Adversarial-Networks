@@ -3,27 +3,24 @@ import matplotlib.pyplot as plt
 from scripts.data_prep_GMSC import load_data
 from scripts.optimization import logistic_regression, evaluate_loss
 from scripts.strategic import best_response
-from scripts.DANN_training import DANN, train_dann_model
+from scripts.DANN_training import GDANN, train_architecture
 from sklearn.metrics import accuracy_score
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+
+from sklearn.linear_model import LogisticRegression
 
 path = ".\GiveMeSomeCredit\cs-training.csv"
-
 X,Y, data  = load_data(path)
-
-# X = X[:5]
-# Y = Y[:5]
-
 n = X.shape[0]
 d = X.shape[1] - 1
-
 
 strat_features = np.array([1, 6, 8]) - 1 # for later indexings
 
 # fit logistic regression model we treat as the truth
 lam = 1.0/n
 theta_true, loss_list, smoothness = logistic_regression(X, Y, lam, 'Exact')
-
 baseline_accuracy = ((X.dot(theta_true) > 0)  == Y).mean()
 
 # Defining constants 
@@ -34,129 +31,21 @@ method = "RRM"
 theta = np.copy(theta_true)
 
 # Define stuff for training the DANN 
-model = DANN(11, 0.01)
+model = GDANN(no_features = 11, no_domain_classes = num_iters)
+scaler = MinMaxScaler()
+logreg = LogisticRegression()
 
+#Lists for storing differnt data distributions
+X_iterations = []
+Y_iterations = []
+
+X = scaler.fit_transform(X)
 X_strat = X
 
-#Define lists for plotting 
-accuracy_list = []
-retrained_accuracy = []
-new_rep_accuracy = []
-new_model_accuracy = []
-
-#Define lists for PCA plotting
-X_modified_list = []
-X_drifted_list = []
-
 for t in range(num_iters):
-    print("t", t, "\n")
-    # adjust distribution to current theta
     X_strat = best_response(X_strat, theta, eps, strat_features)
-    X_strat_scaled = (X_strat - np.mean(X_strat)) / np.std(X_strat)
-    X_drifted_list.append(X_strat_scaled)
-    
-    if t ==0:
-        #train_dann_model(model, X, Y, X_strat, Y, num_epochs=6)
-        model.load_weights('feature_extractor_weights.weights.h5')
-
-    # performative loss value of previous theta
-    loss_start = evaluate_loss(X_strat, Y, theta, lam, strat_features)
-    acc = ((X_strat.dot(theta) > 0) == Y).mean()
-    print("ACC with old theta", acc)
-    accuracy_list.append(acc)
-    
-    # learn on induced distribution
-    theta_init = np.zeros(d+1) if method == 'Exact' else np.copy(theta)
-    
-    theta_new, ll, logistic_smoothness = logistic_regression(X_strat, Y, lam, 'Exact', tol=1e-7, 
-                                                                theta_init=theta_init)
-    
+    X_iterations.append(scaler.fit_transform(X_strat))
+    Y_iterations.append(Y)
     
 
-    # evaluate final loss on the current distribution
-    loss_end = evaluate_loss(X_strat, Y, theta_new, lam, strat_features)
-    acc = ((X_strat.dot(theta_new) > 0) == Y).mean()
-    print("ACC with new theta", acc)
-    retrained_accuracy.append(acc)
-
-    # evalute on new feature representation 
-    X_modified = model.feature_extractor(X_strat)
-    
-    X_modified_scaled = (X_modified - np.mean(X_modified, axis = 0))/np.std(X_modified, axis = 0)
-    X_modified_list.append(X_modified_scaled)
-
-    X_modified = model.feature_extractor.predict(X_strat)
-    #print("X_modified", X_modified[:5], "X mod shape", X_modified.shape)
-    acc = ((X_modified.dot(theta) > 0) == Y).mean()
-    #acc = accuracy_score(Y, np.where(X_modi > 0.5, 1, 0)))
-    print("ACC with modified_rep", acc)
-    new_rep_accuracy.append(acc)
-
-    # evaluate new features with the classifier leart by the DANN 
-    predictions_of_new_classifier = np.where(model.label_classifier.predict(X_modified) > 0.5, 1, 0)
-    acc = accuracy_score(Y, predictions_of_new_classifier)
-    print("ACC with different classifier", acc)
-    new_model_accuracy.append(acc)
-
-    #theta = np.copy(theta_new)
-        
-
-#new_rep_accuracy.insert(0, baseline_accuracy)
-#print("First, retrained, modified", accuracy_list, retrained_accuracy, new_rep_accuracy)
-for elements in zip(accuracy_list, retrained_accuracy, new_rep_accuracy, new_model_accuracy):
-    print(*elements)
-
-# Plotting the lists
-plt.plot(accuracy_list, label='Accuracy with first model')
-plt.plot(retrained_accuracy, label='Retrained accuracy')
-plt.plot(new_rep_accuracy, label = 'Accuracy with modified representation')
-plt.plot(new_model_accuracy, label = 'Accuracy with DANN model')
-
-
-# Adding a horizontal line
-plt.axhline(y=baseline_accuracy, color='r', linestyle='--', label='Baseline accuracy')
-
-# Adding titles for the axes
-plt.xlabel('Iterations of new data being generated')
-plt.ylabel('Accuracy values')
-plt.title(f'Performance of DANN transformation on data from Perdomo et al. 2020 Epsilon :{eps}')
-# Adding a legend
-plt.legend()
-
-# Turning grid on
-plt.grid(True)
-
-# Displaying the plot
-plt.show()
-
-pca = PCA(n_components=2)
-pca_data = {"mod":[],"drift":[]}
-for i in range(len(X_modified_list)):
-    pca_data['mod'].append(pca.fit_transform(X_modified_list[i]))
-    pca_data['drift'].append(pca.fit_transform(X_drifted_list[i]))
-
-pca_og = pca.fit_transform(X)
-
-fig, axs = plt.subplots(1,2, figsize=(10, 10))
-
-axs[0].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
-axs[0].scatter(pca_data['drift'][-1][:,0], pca_data['drift'][-1][:,1], alpha=0.5, label=f'Last iteration drift')
-#axs[2].scatter(pca_og[:,0],pca_og[:,1])
-
-axs[1].scatter(pca_data['mod'][0][:,0], pca_data['mod'][0][:,1], alpha=0.5, label=f'First iteration modified')
-axs[1].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
-#axs[1].scatter(pca.fit_transform(X)[:,0], pca.fit_transform(X)[:,1], alpha=0.5, label=f'Distribution og')
-
-
-axs[0].set_xlabel('PCA 1')
-axs[0].set_ylabel('PCA 2')
-axs[0].set_title(f'Drift effects on the distribution', loc = 'center')
-axs[1].set_xlabel('PCA 1')
-axs[1].set_ylabel('PCA 2')
-axs[1].set_title(f'DANN transformation effects on the distribution', loc = 'center')
-axs[0].legend()
-axs[1].legend()
-
-plt.suptitle("Principal component analysis - data Perdomo 2020")
-plt.tight_layout()
-plt.show()
+train_architecture(model, X, X_iterations, Y_iterations)

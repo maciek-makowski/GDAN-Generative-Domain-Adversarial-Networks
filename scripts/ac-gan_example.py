@@ -50,14 +50,15 @@ def define_discriminator(in_shape=(28,28,1), n_classes=10):
 	# flatten feature maps
 	fe = Flatten()(fe)
 	# real/fake output
-	out1 = Dense(1, activation='sigmoid')(fe)
+	out1 = Dense(1, activation='sigmoid', name = 'real_fake')(fe)
 	# class label output
-	out2 = Dense(n_classes, activation='softmax')(fe)
+	out2 = Dense(n_classes, activation='softmax', name = 'category')(fe)
 	# define model
 	model = Model(in_image, [out1, out2])
 	# compile model
 	opt = Adam(lr=0.0002, beta_1=0.5)
-	model.compile(loss=['binary_crossentropy', 'sparse_categorical_crossentropy'], optimizer=opt)
+	model.compile(loss={'real_fake': 'binary_crossentropy', 
+                    'category': 'sparse_categorical_crossentropy'}, optimizer=opt)
 	return model
 
 # define the standalone generator model
