@@ -176,11 +176,12 @@ class GDANN(models.Model):
         multi_class = Flatten()(multi_class)
 
         #class label output 
-        out2 = Dense(n_classes, activation='softmax', name = 'category')(multi_class)
+        #out2 = Dense(n_classes, activation='softmax', name = 'category')(multi_class)
+        out2 = Dense(n_classes, activation='sigmoid', name = 'category')(multi_class)
         # define model
         model = Model([in_src_dist, in_target_dist], [out1, out2])
         # compile model
-        opt = Adam(learning_rate=0.00001)
+        opt = Adam(learning_rate=0.0001)
         #model.summary()
         model.compile(
             loss ={'real_fake':'binary_crossentropy', 'category':'sparse_categorical_crossentropy'},
@@ -250,35 +251,38 @@ class GDANN(models.Model):
         # image generator input
         in_datapoint = Input(shape=input_shape)
         # foundation for a 11x1 datapoint, first no is number of feature maps
-        n_nodes = 32 
+        n_nodes = 64
         gen = Dense(n_nodes, kernel_initializer=init)(in_datapoint)
         #gen = Activation('relu')(gen)
         gen = LeakyReLU()(gen)
         gen = Flatten()(gen)
-        gen = Reshape((self.no_features,32))(gen)
+        gen = Reshape((self.no_features,64))(gen)
         # merge image gen and label input
         merge = Concatenate()([gen, li])
         ## The output shape of merge should be 11x1x64 now upsample 11 and then downsample back to 11
         ## Here you need to do the encoding decoding from pix2pix
-        gen = Conv1DTranspose(64, kernel_size=6, strides=2)(merge)
+        gen = Conv1DTranspose(128, kernel_size=6, strides=2)(merge)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
-        gen = Conv1DTranspose(128, kernel_size=8, strides=4)(gen)
+        gen = Conv1DTranspose(256, kernel_size=8, strides=4)(gen)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
-        gen = Conv1D(128, kernel_size = 10, strides=2)(gen)
+        gen = Conv1D(256, kernel_size = 10, strides=2)(gen)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
-        gen = Conv1D(64, kernel_size = 4, strides=2)(gen)
+        gen = Conv1D(128, kernel_size = 4, strides=2)(gen)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
         gen = Flatten()(gen)
         gen = Dense(11)(gen)
         #test different activation
-        scaling_factor = 3
-        out_layer = Activation(lambda x: scaling_factor * tf.keras.activations.tanh(x))(gen)
+        #Either map it to (-3,3)
+        #scaling_factor = 10
+        #out_layer = Activation(lambda x: scaling_factor * tf.keras.activations.tanh(x))(gen)
+        #here it gets mapped to (-1,1)
         #out_layer = Activation('tanh')(gen)
         # define model
+        out_layer = Activation('linear')(gen)
         model = Model([in_datapoint, in_label], out_layer)
 
 
@@ -297,7 +301,7 @@ class GDANN(models.Model):
         # define gan model as taking noise and label and outputting real/fake and label outputs
         model = Model(inputs = [in_src ,in_class], outputs = [dis_output[0], dis_output[1], gen_out])
         # compile model
-        opt = Adam(learning_rate=0.00001)
+        opt = Adam(learning_rate=0.0004)
         model.compile(loss=['binary_crossentropy','sparse_categorical_crossentropy','mae'], optimizer=opt)
         #plot_model(model, to_file='GAN.png', show_shapes=True, show_layer_names=True)
         return model
@@ -412,7 +416,7 @@ def generate_real_samples(dataset, first_dist, len_single_domain, c_labels, d_la
     return datapoints, original_datapoints, class_labels, domain_labels
 
     
-def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  num_epochs = 200, batch_size = 1024):
+def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  num_epochs = 100, batch_size = 1024):
     domain_labels = []
     iterations_data = []
 
@@ -455,14 +459,16 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
                 features = model.feature_extractor(datapoints)
                 discriminator_output = model.discriminator([tf.convert_to_tensor(original_points), features])
                 binary_loss_real = tf.keras.losses.binary_crossentropy(tf.ones_like(discriminator_output[0]), discriminator_output[0])
-                category_loss_real = tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output[1])
-            
+                #category_loss_real = tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output[1])
+                category_loss_real = tf.keras.losses.binary_crossentropy(tf.reshape(domain_labels_tensor, (-1,1)), discriminator_output[1])
+                
                 #Train discriminator on generated distributions
                 generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
                 discriminator_output_fake = model.discriminator([generated_t0, features])
                 binary_loss_fake = tf.keras.losses.binary_crossentropy(tf.zeros_like(discriminator_output_fake[0]), discriminator_output_fake[0])
-                category_loss_fake = tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output_fake[1])
-                
+                #category_loss_fake = tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output_fake[1])
+                category_loss_fake = tf.keras.losses.binary_crossentropy(tf.reshape(domain_labels_tensor, (-1,1)), discriminator_output_fake[1])
+
                 discriminators_loss = tf.reduce_mean(binary_loss_real + category_loss_real + binary_loss_fake + category_loss_fake)
             
             
@@ -485,13 +491,14 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
                 generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
                 discriminator_output = model.discriminator([generated_t0, features])
                 generator_binary_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(discriminator_output[0]), discriminator_output[0])
-                generator_category_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.convert_to_tensor(domain_labels),discriminator_output[1])
+                #generator_category_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.convert_to_tensor(domain_labels),discriminator_output[1])
+                generator_category_loss = tf.keras.losses.binary_crossentropy(tf.reshape(tf.convert_to_tensor(domain_labels),(-1,1)),discriminator_output[1])
                 #mae_between_distributions = np.mean(np.abs(original_points - generated_t0), axis = 1)
                 mae_between_distributions = tf.reduce_mean(tf.abs(original_points - generated_t0), axis = 1)
                 #generator_loss = tf.reduce_mean(generator_binary_loss + generator_category_loss) + lam * mae_between_distributions
-                generator_loss = tf.reduce_mean(generator_binary_loss) + lam * mae_between_distributions
+                generator_loss = tf.reduce_mean(generator_binary_loss + generator_category_loss) + lam * mae_between_distributions
                 
-                if i > 200:       
+                if i > 350:       
                     generator_trainable_vars = model.gan_model.trainable_variables
                     grads = generator_tape.gradient(generator_loss, generator_trainable_vars)
                     model.gan_model.optimizer.apply_gradients(zip(grads, generator_trainable_vars))
@@ -504,7 +511,7 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
             encoder_loss = tf.reduce_mean(label_loss - lambda_2 * (category_loss_real + category_loss_fake))
          
         # Compute gradients
-        if i <= 200:
+        if i <= 350:
             trainable_vars_enc = model.feature_extractor.trainable_variables
             trainable_vars_task = model.label_classifier.trainable_variables
             
@@ -537,11 +544,12 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
             generated_t0 = model.generator([features, tf.convert_to_tensor(test_domain_labels)])
             disc_output = model.discriminator([generated_t0, features])
             predicted_domain_probabilities = disc_output[1]
-            predicted_domain_class = np.argmax(predicted_domain_probabilities, axis=1)
+            #predicted_domain_class = np.argmax(predicted_domain_probabilities, axis=1)
+            predicted_domain_class = tf.cast(predicted_domain_probabilities >= 0.5, tf.int32)
 
             #print("Points", test_data[:10])
-            print("Generated points", generated_t0[:5])
-            print("Original X points", first_dist[random_indices % int(0.2 * len(combined_data))])
+            # print("Generated points", generated_t0[:5])
+            # print("Original X points", first_dist[random_indices % int(0.2 * len(combined_data))])
 
             print("Category labels probs", predicted_domain_probabilities[:10])
             print("Category labels", predicted_domain_class[:10])
@@ -576,10 +584,15 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
                 "Domain_Classification_Accuracy": train_accuracy_domain,
                 "Step number": i,
                 "Generator mae loss": tf.reduce_mean(generator_loss).numpy(),
-                "Generator class loss": tf.reduce_mean(generator_binary_loss).numpy(),
+                "Generator real/fake loss": tf.reduce_mean(generator_binary_loss).numpy(),
+                "Generator category loss": tf.reduce_mean(generator_category_loss).numpy(),
                 "Discriminator loss": tf.reduce_mean(discriminators_loss).numpy(),
                 "Label loss": tf.reduce_mean(label_loss).numpy(),
-                "Class accuracy": train_accuracy_class
+                "Class accuracy": train_accuracy_class,
+                "Disc real loss": tf.reduce_mean(binary_loss_real).numpy(),
+                "Disc fake loss": tf.reduce_mean(binary_loss_fake).numpy(),
+                "Disc category loss real": tf.reduce_mean(category_loss_real).numpy(),
+                "Disc category loss fake": tf.reduce_mean(category_loss_fake).numpy()
             }
 
             iterations_data.append(iteration_data)
@@ -593,10 +606,15 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
         df['Domain_Classification_Accuracy'] = iteration["Domain_Classification_Accuracy"]
         df['Step number'] = iteration["Step number"]
         df['Generator mae loss'] = iteration["Generator mae loss"]
-        df['Generator class loss'] = iteration['Generator class loss']
+        df['Generator real/fake loss'] = iteration['Generator real/fake loss']
+        df['Generator class loss'] = iteration['Generator category loss']
         df['Dicriminator loss'] = iteration["Discriminator loss"]
         df['Label loss'] = iteration['Label loss']
         df['Class accuracy'] = iteration['Class accuracy']
+        df['Disc real loss'] = iteration['Disc real loss']
+        df['Disc fake loss'] = iteration ['Disc fake loss']
+        df['Disc category loss real'] = iteration['Disc category loss real']
+        df['Disc category loss fake'] = iteration['Disc category loss fake']
         dfs.append(df)
 
     concatenated_df = pd.concat(dfs, ignore_index=True)

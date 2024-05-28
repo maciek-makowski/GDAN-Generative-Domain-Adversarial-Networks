@@ -1,43 +1,23 @@
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
-from scripts.data_prep_GMSC import load_data
-from sklearn.model_selection import train_test_split
-
-# Assuming you have your dataset loaded into X, y
-path = ".\GiveMeSomeCredit\cs-training.csv"
-
-X,Y, data  = load_data(path)
-
-# X = X[:5]
-# Y = Y[:5]
-
-n = X.shape[0]
-d = X.shape[1] - 1
-
-# Split the dataset into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.2, random_state=42)
-
-# Define the architecture of the neural network
-model = Sequential([
-    Dense(64, activation='relu', input_shape=(11,)),
-    Dense(32, activation='relu'),
-    Dense(1, activation='sigmoid')  # Output layer with sigmoid activation for binary classification
-])
+from sklearn.preprocessing import MinMaxScaler
 
 
-# Compile the model
-model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+scaler = MinMaxScaler(feature_range=(-10,10))
 
-# Train the model
-model.fit(X_train, y_train, epochs=10, batch_size=32, validation_data=(X_test, y_test))
+a = np.array([1,2,4,20,-20,5,0]).reshape(-1,1)
+b = np.array([1,2,4,30,-50,25,0]).reshape(-1,1)
 
-pred = model.predict(X_test)
+print(a)
+print(b)
 
-## check if acc is calculated correct 
+new_a = scaler.fit_transform(a)
+#new_b = scaler.fit_transform(b)
 
-print( np.mean((pred > 0.5) == y_test))  
-# Evaluate the model on test data
-test_loss, test_accuracy = model.evaluate(X_test, y_test)
-print("Test Accuracy:", test_accuracy)
+print("NEw a", new_a)
+#print("NEW b", new_b)
+
+new_a2 = scaler.transform(a)
+new_b2 = scaler.transform(b)
+
+print("new A2", new_a2)
+print("new B2", new_b2)

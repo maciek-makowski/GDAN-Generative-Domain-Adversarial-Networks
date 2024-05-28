@@ -9,7 +9,9 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.decomposition import PCA
+from mpl_toolkits.mplot3d import Axes3D
 import tensorflow as tf
+import random
 
 from sklearn.linear_model import LogisticRegression
 
@@ -20,23 +22,34 @@ d = X.shape[1] - 1
 
 strat_features = np.array([1, 6, 8]) - 1 # for later indexings
 
-# fit logistic regression model we treat as the truth
-lam = 1.0/n
-theta_true, loss_list, smoothness = logistic_regression(X, Y, lam, 'Exact')
-baseline_accuracy = ((X.dot(theta_true) > 0)  == Y).mean()
 
 # Defining constants 
-num_iters = 5
+num_iters = 1
 eps = 10
 method = "RRM"
-# initial theta
-theta = np.copy(theta_true)
+
+
 
 # Define stuff for training the DANN 
 model = GDANN(no_features = 11, no_domain_classes = num_iters)
 scaler = StandardScaler()
+# scaler = MinMaxScaler(feature_range=(-10,10))
 pca = PCA(n_components = 2)
-logreg = LogisticRegression()
+logreg = LogisticRegression(C = 0.01)
+retrained_logreg = LogisticRegression(C = 0.01)
+
+
+# fit logistic regression model we treat as the truth
+# lam = 1.0/n
+# theta_true, loss_list, smoothness = logistic_regression(X, Y, lam, 'Exact')
+# baseline_accuracy = ((X.dot(theta_true) > 0)  == Y).mean()
+
+logreg.fit(X,Y)
+theta =  logreg.coef_[0]
+baseline_accuracy = accuracy_score(Y, logreg.predict(X))
+#Scale the data to a range (-1,1)
+#X = scaler.fit_transform(X)
+
 
 #Lists for storing differnt data distributions
 X_iterations = []
@@ -44,127 +57,126 @@ Y_iterations = []
 
 X_strat = X
 
-for t in range(num_iters):
+X_iterations.append(X)
+X_strat = best_response(X_strat, theta, eps, strat_features)
+X_iterations.append(X_strat)
+Y_iterations.append(Y)
+Y_iterations.append(Y)
+
+
+# train_architecture(model, X, X_iterations, Y_iterations)
+model.load_weights("GDANN_arch.weights.h5")
+# # # # # model.load_weights("./model_weights/GDANN_21_05.weights.h5")
+accuracies_og_model = []
+accuracies_ret_model = []
+accuracies_gen_rep = []
+accuracies_DANN_model = []
+
+
+num_test_iters = 10
+for i in range(num_test_iters):
     X_strat = best_response(X_strat, theta, eps, strat_features)
-    print("X_strat", X_strat[:5])
-    #X_iterations.append(scaler.fit_transform(X_strat))
-    X_iterations.append(X_strat)
-    Y_iterations.append(Y)
-    
+
+    selected_indices = np.random.choice(X_strat.shape[0], size = 5, replace = False)
+    selected_points = X_strat[selected_indices]
+    selected_labels = Y[selected_indices]
+
+    feature_rep = model.feature_extractor(selected_points)
+    generated_rep = model.generator([feature_rep, tf.ones_like(selected_labels)])
 
 
-#train_architecture(model, X, X_iterations, Y_iterations)
-#model.load_weights("GDANN_arch.weights.h5")
-model.load_weights("GDANN_15_05.weights.h5")
+    for j,point in enumerate(selected_points):
+        if i == 0 or i ==9:
+            plt.scatter(np.arange(11), point, label='Drifted', marker='o')
+            plt.scatter(np.arange(11), X[selected_indices[j]], label='Original', marker='s')
+            plt.scatter(np.arange(11), generated_rep[j], label='Generated', marker='^')
+            plt.xlabel('Index')
+            plt.ylabel('Value')
+            plt.title('Generated vs Drifted vs OG')
+            plt.legend()
+            plt.show()
 
-domain_labels = []
-len_single_domain = len(X_iterations[0])
-for i, datapoints in enumerate(X_iterations):
-    domain_labels.extend([i] * len(datapoints))
-    
-    combined_domain_labels = np.array(domain_labels)   
-    combined_data = np.concatenate(X_iterations)
-    combined_class_labels = np.concatenate(Y_iterations) 
+    feature_rep_entire_df = model.feature_extractor(X_strat)
+    generated_rep_entire_df = model.generator([feature_rep_entire_df, tf.ones_like(Y)])
+
+    normalized_drift = scaler.fit_transform(X_strat)
+    normalized_generated = scaler.fit_transform(generated_rep_entire_df)
+
+    #Check the mean and STDS 
+
+    mean_drift = np.mean(normalized_drift, axis =0)
+    mean_gen = np.mean(normalized_generated, axis =0)
+    mean_og = np.mean(X, axis =0)
+
+    std_drift = np.std(normalized_drift, axis = 0)
+    std_gen = np.std(normalized_generated, axis = 0)
+    std_og = np.std(X, axis = 0)
+
+    normalized_X = scaler.fit_transform(X)
+    mean_scaled_X = np.mean(normalized_X, axis = 0)
+    std_scaled_X = np.std(normalized_X, axis = 0)
+
+    print("\n")
+    print("Check the mean and variance")
+    print("\n")
+
+    print("Drift :", mean_drift, std_drift)
+    print("Gen :", mean_gen, std_gen)
+    print("OG :", mean_og, std_og)
+    print("Norm OG :", mean_scaled_X, std_scaled_X)
+
+    pca_drifted = pca.fit_transform(normalized_drift)
+    pca_original = pca.fit_transform(normalized_X)
+    pca_generated = pca.fit_transform(normalized_generated)
+    if i ==0 or i ==9:
+    # Plot PCA results
+        plt.figure(figsize=(10, 6))
+
+        # Plot drifted data
+        plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
+
+        # Plot original data
+        plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
+
+        # Plot generated data
+        plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data')
+
+        # Add labels and legend
+        plt.xlabel('Principal Component 1')
+        plt.ylabel('Principal Component 2')
+        plt.legend()
+        plt.grid(True)
+
+        # Show plot
+        plt.show()
 
 
+    #Retraining 
+    retrained_logreg.fit(X_strat, Y)
+
+    #Predictions for class labels by DANN
+    predicted_class_labels_probabilities = model.label_classifier(feature_rep_entire_df)
+    predicted_class_labels = tf.cast(predicted_class_labels_probabilities >= 0.5, tf.int32)
+
+    #Assesment of the accuracies 
+    accuracies_og_model.append(accuracy_score(Y,logreg.predict(X_strat)))
+    accuracies_ret_model.append(accuracy_score(Y, retrained_logreg.predict(X_strat)))
+    accuracies_gen_rep.append(accuracy_score(Y, logreg.predict(generated_rep_entire_df)))
+    accuracies_DANN_model.append(accuracy_score(Y, predicted_class_labels))
+
+iterations = np.arange(num_test_iters)
 
 
+print("Iteration", iterations, iterations.shape)
+print("Accuracy", accuracies_og_model, len(accuracies_og_model))
+plt.plot(iterations, accuracies_og_model, marker='o', label='Original LR Model')
+plt.plot(iterations, accuracies_ret_model, marker='o', label='Retrained LR Model')
+plt.plot(iterations, accuracies_gen_rep, marker='o', label='Generated representation with original LR model')
+plt.plot(iterations, accuracies_DANN_model, marker='o', label='DANN Model')
 
-# # for i in set(domain_labels):
-# #     random_index = np.random.randint(0, len(combined_data))
-
-# #     random_data_point = combined_data[random_index].reshape(-1,1)
-# #     random_domain_label = combined_domain_labels[random_index]
-# #     random_class_label = combined_class_labels[random_index]
-    
-# #     actual_index = random_index % int(0.2 * len(combined_data))
-# #     print("Random index", random_index)
-# #     print("Actual index", actual_index)
-
-
-# #     feature_rep = model.feature_extractor(random_data_point.T)
-# #     generated_rep = model.generator([feature_rep, tf.convert_to_tensor(random_domain_label.reshape(-1,1))])
-
-# #     print("drifted", random_data_point.T)
-# #     print("X0", X[actual_index])
-# #     print("generated", generated_rep.numpy())
-
-# #     plt.scatter(np.arange(11), random_data_point, label='drifted')
-# #     plt.scatter(np.arange(11), X[actual_index], label='OG')
-# #     plt.scatter(np.arange(11), generated_rep, label='Generated') 
-# #     plt.xlabel('Index')
-# #     plt.ylabel('Value')
-# #     plt.title(f"Differences betweeen generated, origianal, and drift-influenced points - iteration {random_domain_label}")
-# #     plt.legend()
-# #     plt.show()
-
-
-selected_points = []
-#fig, axs = plt.subplots(5, 1, figsize=(20, 4))
-
-for i, domain_label in enumerate(set(combined_domain_labels)):
-    # Select a random index with the current domain label
-    domain_indices = np.where(combined_domain_labels == domain_label)[0]
-    random_index = np.random.choice(domain_indices)
-    original_index = random_index % int(0.2 * len(combined_data))
-    
-    random_data_point = combined_data[random_index].reshape(-1, 1)
-    random_domain_label = combined_domain_labels[random_index]
-    random_class_label = combined_class_labels[random_index]
-
-    feature_rep = model.feature_extractor(random_data_point.T)
-    generated_rep = model.generator([feature_rep, tf.convert_to_tensor(random_domain_label.reshape(-1, 1))])
-
-    plt.scatter(np.arange(11), random_data_point, label='Drifted', marker='o')
-    plt.scatter(np.arange(11), X[original_index], label='Original', marker='s')
-    plt.scatter(np.arange(11), generated_rep, label='Generated', marker='^')
-    plt.xlabel('Index')
-    plt.ylabel('Value')
-    plt.title(f'Domain Label: {random_domain_label}')
-    plt.legend()
-    plt.show()
-    # axs[i].scatter(np.arange(11), random_data_point, label='Drifted', marker='o')
-    # axs[i].scatter(np.arange(11), X[original_index], label='Original', marker='s')
-    # axs[i].scatter(np.arange(11), generated_rep, label='Generated', marker='^')
-    # axs[i].set_xlabel('Index')
-    # axs[i].set_ylabel('Value')
-    # axs[i].set_title(f'Domain Label: {random_domain_label}')
-    # axs[i].legend()
-    
-
-domain_label = 0
-indices_domain = np.where(combined_domain_labels == domain_label)[0]
-drifted_datapoints = combined_data[indices_domain]
-selected_domain_labels = combined_domain_labels[indices_domain]
-original_indicies = indices_domain % int(0.2 * len(combined_data))
-original_datapoints = X[original_indicies]
-feature_rep = model.feature_extractor(drifted_datapoints)
-generated_rep = model.generator([feature_rep, tf.convert_to_tensor(selected_domain_labels)])
-
-normalized_drift = scaler.fit_transform(drifted_datapoints)
-normalized_generated = scaler.fit_transform(generated_rep)
-
-pca_drifted = pca.fit_transform(normalized_drift)
-pca_original = pca.fit_transform(original_datapoints)
-pca_generated = pca.fit_transform(normalized_generated)
-
-# Plot PCA results
-plt.figure(figsize=(10, 6))
-
-# Plot drifted data
-plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', label=f'Data that has been influenced by the drift iter: {domain_label}')
-
-# Plot original data
-plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', label='Original Data')
-
-# Plot generated data
-plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', label='Generated Data')
-
-# Add labels and legend
-plt.xlabel('Principal Component 1')
-plt.ylabel('Principal Component 2')
+plt.xlabel('Iteration')
+plt.ylabel('Accuracy')
+plt.title('Model Accuracies Over Iterations')
 plt.legend()
 plt.grid(True)
-
-# Show plot
 plt.show()
