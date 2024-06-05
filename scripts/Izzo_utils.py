@@ -8,7 +8,7 @@ s1 = 0.5  #square root of standard deviation 1
 
 mu0 = 1
 mu1 = -1
-eps = 3.0
+eps = 10.0
 
 reg = 1e-2
 

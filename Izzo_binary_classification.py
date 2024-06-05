@@ -9,20 +9,26 @@ from sklearn.metrics import accuracy_score
 # from scripts.DANN_training import DANN, train_dann_model
 from scripts.DANN_training import GDANN, train_architecture
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import tensorflow as tf
 
 
 num_iters = 10
 no_samples = 10000
 no_features = 11
-strat_features = np.ones(no_features)
+# strat_features = np.ones(no_features)
+strat_features = np.zeros(no_features)
+strat_features[0:int(0.5*no_features)] = np.ones(int(0.5*no_features)) 
 #theta = np.random.randn(no_features)
 theta = np.ones(no_features)
 print(theta)
 
 ### Try to specify the models better, cause there is divergence in accuracies between methods
 logreg = LogisticRegression(C = 0.01, penalty='l2')
-retrained_model = LogisticRegression(C = 0.01, penalty='l2')
+retrained_logreg = LogisticRegression(C = 0.01, penalty='l2')
 model = GDANN(no_features = 11, no_domain_classes = 1)
+scaler = StandardScaler()
+pca = PCA(n_components = 2)
 
 X,Y = shift_dist(no_samples, theta, no_features, strat_features)
 X_og = X
@@ -42,113 +48,164 @@ Y_iterations = []
 X_iterations.append(X_og)
 Y_iterations.append(Y_og)
 X_iterations.append(X)
-X_iterations.append(Y)
+Y_iterations.append(Y)
 
-print("SHape X_og", X_og.shape)
-print("Shape X", X.shape)
+# train_architecture(model, X_og, X_iterations, Y_iterations)
+model.load_weights("GDANN_arch.weights.h5")
+# # model.load_weights("./model_weights/GDANN_IZZO_28_05.weights.h5")
 
-train_architecture(model, X_og, X_iterations, Y_iterations)
+#define lists for plotting
+accuracies_og_model = []
+accuracies_ret_model = []
+accuracies_gen_rep = []
+accuracies_DANN_model = []
 
-# # Lists for plotting
-# regular_accuracies = []
-# retrained_accuracies = []
-# new_rep_accuracies = []
-# new_rep_DANN_model = []
+pca_drifted_list = []
+pca_drifted_non_norm_list = []
 
-# # Lists for PCA plotting
-# X_modified_list = []
-# X_drifted_list = []
+drifted_list = []
+generated_list = []
 
+#testing loop 
+num_test_iters = 20
+for i in range(num_test_iters):
+    X,Y = shift_dist(no_samples, theta, no_features, strat_features)
 
+    feature_rep_entire_df = model.feature_extractor(X)
+    generated_rep_entire_df = model.generator([feature_rep_entire_df, tf.ones_like(Y)])
 
-# for t in range(num_iters):
-#     old_accuracy = accuracy_score(Y, logreg.predict(X))
-#     regular_accuracies.append(old_accuracy)
-#     print("accuracy with old model", old_accuracy)
+    # normalized_drift = scaler.fit_transform(X)
+    # normalized_generated = scaler.fit_transform(generated_rep_entire_df)
+    # normalized_X = scaler.fit_transform(X_og)
 
-#     X_prev = X
-#     Y_prev = Y
+    # pca_drifted = pca.fit_transform(normalized_drift)
+    # pca_original = pca.fit_transform(normalized_X)
+    # pca_generated = pca.fit_transform(normalized_generated)
 
-#     X,Y = shift_dist(no_samples, theta, no_features, strat_features)
-#     retrained_model.fit(X,Y)
+    # pca_drifted = pca.fit_transform(X)
+    # pca_original = pca.fit_transform(X_og)
+    # pca_generated = pca.fit_transform(generated_rep_entire_df)
 
-#     X_drift_scaled = (X - np.mean(X, axis = 0)) / np.std(X, axis=0)
-#     X_drifted_list.append(X_drift_scaled)
+   
+    # pca_drifted_list.append(pca_drifted)
+    # pca_drifted_non_norm_list.append(pca.fit_transform(X))
 
-#     if t == 0:
-#         #train_dann_model(DANN_model, X_prev, Y_prev, X, Y, num_epochs=6, data_generator="Izzo")
-#         DANN_model.load_weights('feature_extractor_weights_Izzo.weights.h5')
-        
-#     retrained_accuracy = accuracy_score(Y, retrained_model.predict(X))
-#     retrained_accuracies.append(retrained_accuracy)
-#     print("accuracy after retraining", retrained_accuracy)
-    
-#     modified_X = DANN_model.feature_extractor.predict(X)
-    
-#     X_modified_scaled = (modified_X - np.mean(modified_X, axis = 0))/np.std(modified_X, axis = 0)
-#     X_modified_list.append(X_modified_scaled)
+    # # Plot PCA results
+    # plt.figure(figsize=(10, 6))
 
-#     new_rep_accuracy = accuracy_score(Y, logreg.predict(modified_X))
-#     new_rep_accuracies.append(new_rep_accuracy)
-#     print("accuracy with new representation", new_rep_accuracy)
+    # # Plot drifted data
+    # plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
 
-#     predictions_DANN_model = np.where(DANN_model.label_classifier.predict(modified_X) > 0.5, 1,0)
-#     acc = accuracy_score(Y, predictions_DANN_model)
-#     new_rep_DANN_model.append(acc)
-#     print("accuracy new rep DANN model",acc)
+    # # Plot original data
+    # plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
 
+    # # Plot generated data
+    # plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data', alpha = 0.1)
 
-# # Plotting the lists
-# plt.plot(regular_accuracies, label='Accuracy with first model')
-# plt.plot(retrained_accuracies, label='Retrained accuracy')
-# plt.plot(new_rep_accuracies, label = 'Accuracy with modified representation')
-# plt.plot(new_rep_DANN_model, label = 'Accuracies with DANN model')
+    # # Add labels and legend
+    # plt.xlabel('Principal Component 1')
+    # plt.ylabel('Principal Component 2')
+    # plt.legend()
+    # plt.title(f"Principal Component Analysis iter {i}")
+    # plt.grid(True)
 
+    # # Show plot
+    # plt.show()
 
-# # Adding a horizontal line
-# plt.axhline(y=baseline_accuracy, color='r', linestyle='--', label='Baseline accuracy')
+    #Store the data for distance calculations
+    drifted_list.append(X)
+    generated_list.append(generated_rep_entire_df)
 
-# # Adding titles for the axes
-# plt.xlabel('Iterations of new data being generated')
-# plt.ylabel('Accuracy values')
-# plt.title('Performance with generation of a DANN transformation on data from Izzo et al. 2022')
-# # Adding a legend
-# plt.legend()
+    #Retraining 
+    retrained_logreg.fit(X, Y)
+    if i % 3 == 0 and i != 0: theta = retrained_logreg.coef_[0].T
+    print("RETRAINED THETA", theta, "Iteration", i)
 
-# # Turning grid on
-# plt.grid(True)
+    #Predictions for class labels by DANN
+    predicted_class_labels_probabilities = model.label_classifier(feature_rep_entire_df)
+    predicted_class_labels = tf.cast(predicted_class_labels_probabilities >= 0.5, tf.int32)
 
-# # Displaying the plot
-# plt.show()
+    #Assesment of the accuracies 
+    accuracies_og_model.append(accuracy_score(Y,logreg.predict(X)))
+    accuracies_ret_model.append(accuracy_score(Y, retrained_logreg.predict(X)))
+    accuracies_gen_rep.append(accuracy_score(Y, logreg.predict(generated_rep_entire_df)))
+    accuracies_DANN_model.append(accuracy_score(Y, predicted_class_labels))
 
-# pca = PCA(n_components=2)
-# pca_data = {"mod":[],"drift":[]}
-# for i in range(len(X_modified_list)):
-#     pca_data['mod'].append(pca.fit_transform(X_modified_list[i]))
-#     pca_data['drift'].append(pca.fit_transform(X_drifted_list[i]))
-
-# pca_og = pca.fit_transform(X_og)
-
-# fig, axs = plt.subplots(1,2, figsize=(10, 10))
-
-# axs[0].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
-# axs[0].scatter(pca_data['drift'][-1][:,0], pca_data['drift'][-1][:,1], alpha=0.5, label=f'Last iteration drift')
-# axs[0].scatter(pca_og[:,0], pca_og[:,1], alpha = 0.5, label = f'Original data distribution')
-
-# axs[1].scatter(pca_data['mod'][0][:,0], pca_data['mod'][0][:,1], alpha=0.5, label=f'First iteration modified')
-# axs[1].scatter(pca_data['drift'][0][:,0], pca_data['drift'][0][:,1], alpha=0.5, label=f'First iteration drift')
-# #axs[1].scatter(pca.fit_transform(X)[:,0], pca.fit_transform(X)[:,1], alpha=0.5, label=f'Distribution og')
+iterations = np.arange(num_test_iters)
 
 
-# axs[0].set_xlabel('PCA 1')
-# axs[0].set_ylabel('PCA 2')
-# axs[0].set_title(f'Drift effects on the distribution', loc = 'center')
-# axs[1].set_xlabel('PCA 1')
-# axs[1].set_ylabel('PCA 2')
-# axs[1].set_title(f'DANN transformation effects on the distribution', loc = 'center')
-# axs[0].legend()
-# axs[1].legend()
+print("Iteration", iterations, iterations.shape)
+print("Accuracy OG", accuracies_og_model)
+print("Accuracy ret", accuracies_ret_model)
+print("Accuracy gen", accuracies_gen_rep)
+print("Accuracy DANN", accuracies_DANN_model)
+plt.plot(iterations, accuracies_og_model, marker='o', label='Original LR Model')
+plt.plot(iterations, accuracies_ret_model, marker='o', label='Retrained LR Model')
+plt.plot(iterations, accuracies_gen_rep, marker='o', label='Generated representation with original LR model')
+plt.plot(iterations, accuracies_DANN_model, marker='o', label='DANN Model')
 
-# plt.suptitle("Principal component analysis - data Izzo 2022")
-# plt.tight_layout()
-# plt.show()
+plt.xlabel('Iteration')
+plt.ylabel('Accuracy')
+plt.title('Model Accuracies Over Iterations')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+distances_og_gen = []
+distances_og_drift = []
+
+for i,drifted_data in enumerate(drifted_list):
+    distances_og_drift.append(np.mean(np.abs(drifted_data - X_og)))
+    distances_og_gen.append(np.mean(np.abs(generated_list[i] - X_og)))
+
+
+print("len of the entire list", len(distances_og_drift))
+print("len of a single thingy", distances_og_drift[0].shape)
+
+fig, ax1 = plt.subplots()
+
+# Plot the accuracies on the primary y-axis
+color1 = 'tab:blue'
+color2 = 'tab:green'
+ax1.plot(iterations, accuracies_og_model, marker='o', label='Accuracy original LR Model', color=color1)
+ax1.plot(iterations, accuracies_gen_rep, marker='o', label='Accuracy generated representation with original LR model', color=color2)
+ax1.set_xlabel('Iterations')
+ax1.set_ylabel('Accuracy', color=color1)
+ax1.tick_params(axis='y', labelcolor=color1)
+ax1.legend(loc='upper left')
+ax1.grid(True, which='both', axis='y', linestyle='--', color=color1, alpha=0.5)
+
+# Create a second y-axis to plot the distances
+ax2 = ax1.twinx()
+color3 = 'tab:red'
+color4 = 'tab:purple'
+ax2.plot(iterations, distances_og_drift, marker='o', label='Distance between original and influenced by the drift', color=color3)
+ax2.plot(iterations, distances_og_gen, marker='o', label='Distance between original and generated', color=color4)
+ax2.set_ylabel('Distance', color=color3)
+ax2.tick_params(axis='y', labelcolor=color3)
+ax2.legend(loc='upper right')
+ax2.grid(True, which='both', axis='y', linestyle='--', color=color3, alpha=0.5)
+
+# Add a title for the entire plot
+plt.title('Accuracies and Distances over Iterations')
+
+# Show the plot
+plt.show()
+
+
+
+colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
+for i,pca_drifted in enumerate(pca_drifted_list):
+    print("Iter ", i)
+    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c=colors[i], marker = 'o', label=f'Iter {i}')
+
+plt.legend()
+plt.title("Differences in data distributions influenced by the drift")
+plt.show()
+
+for i,pca_drifted in enumerate(pca_drifted_non_norm_list):
+    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c=colors[i], marker = 'o', label=f'Iter {i}')
+
+plt.legend()
+plt.title("Differences in data distributions influenced by the drift not normalized")
+plt.show()

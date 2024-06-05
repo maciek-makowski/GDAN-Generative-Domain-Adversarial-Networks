@@ -65,8 +65,8 @@ Y_iterations.append(Y)
 
 
 # train_architecture(model, X, X_iterations, Y_iterations)
-model.load_weights("GDANN_arch.weights.h5")
-# # # # # model.load_weights("./model_weights/GDANN_21_05.weights.h5")
+# model.load_weights("GDANN_arch.weights.h5")
+model.load_weights("./model_weights/GDANN_28_05.weights.h5")
 accuracies_og_model = []
 accuracies_ret_model = []
 accuracies_gen_rep = []
@@ -87,12 +87,12 @@ for i in range(num_test_iters):
 
     for j,point in enumerate(selected_points):
         if i == 0 or i ==9:
-            plt.scatter(np.arange(11), point, label='Drifted', marker='o')
+            plt.scatter(np.arange(11), point, label='Influenced by the drift', marker='o')
             plt.scatter(np.arange(11), X[selected_indices[j]], label='Original', marker='s')
             plt.scatter(np.arange(11), generated_rep[j], label='Generated', marker='^')
             plt.xlabel('Index')
             plt.ylabel('Value')
-            plt.title('Generated vs Drifted vs OG')
+            plt.title(f'Generated vs Drifted vs OG iteration {i}')
             plt.legend()
             plt.show()
 
@@ -128,6 +128,9 @@ for i in range(num_test_iters):
     pca_drifted = pca.fit_transform(normalized_drift)
     pca_original = pca.fit_transform(normalized_X)
     pca_generated = pca.fit_transform(normalized_generated)
+    # pca_drifted = pca.fit_transform(X_strat)
+    # pca_original = pca.fit_transform(X)
+    # pca_generated = pca.fit_transform(generated_rep_entire_df)
     if i ==0 or i ==9:
     # Plot PCA results
         plt.figure(figsize=(10, 6))
@@ -144,6 +147,7 @@ for i in range(num_test_iters):
         # Add labels and legend
         plt.xlabel('Principal Component 1')
         plt.ylabel('Principal Component 2')
+        plt.title(f'Principal Components iteration {i}')
         plt.legend()
         plt.grid(True)
 
