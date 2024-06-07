@@ -14,7 +14,7 @@ import tensorflow as tf
 
 
 num_iters = 10
-no_samples = 10000
+no_samples = 20000
 no_features = 11
 # strat_features = np.ones(no_features)
 strat_features = np.zeros(no_features)
@@ -52,7 +52,10 @@ Y_iterations.append(Y)
 
 # train_architecture(model, X_og, X_iterations, Y_iterations)
 model.load_weights("GDANN_arch.weights.h5")
-# # model.load_weights("./model_weights/GDANN_IZZO_28_05.weights.h5")
+# # # model.load_weights("./model_weights/GDANN_IZZO_28_05.weights.h5")
+
+#Change the no_points not to overload the memory
+no_samples = 10000
 
 #define lists for plotting
 accuracies_og_model = []
@@ -72,7 +75,8 @@ for i in range(num_test_iters):
     X,Y = shift_dist(no_samples, theta, no_features, strat_features)
 
     feature_rep_entire_df = model.feature_extractor(X)
-    generated_rep_entire_df = model.generator([feature_rep_entire_df, tf.ones_like(Y)])
+    # generated_rep_entire_df = model.generator([feature_rep_entire_df, tf.zeros_like(Y)])
+    generated_rep_entire_df = model.generator([feature_rep_entire_df])
 
     # normalized_drift = scaler.fit_transform(X)
     # normalized_generated = scaler.fit_transform(generated_rep_entire_df)
@@ -82,35 +86,35 @@ for i in range(num_test_iters):
     # pca_original = pca.fit_transform(normalized_X)
     # pca_generated = pca.fit_transform(normalized_generated)
 
-    # pca_drifted = pca.fit_transform(X)
-    # pca_original = pca.fit_transform(X_og)
-    # pca_generated = pca.fit_transform(generated_rep_entire_df)
+    pca_drifted = pca.fit_transform(X)
+    pca_original = pca.fit_transform(X_og)
+    pca_generated = pca.fit_transform(generated_rep_entire_df)
 
-   
-    # pca_drifted_list.append(pca_drifted)
-    # pca_drifted_non_norm_list.append(pca.fit_transform(X))
+    if i % 3 == 0:
+        pca_drifted_list.append(pca_drifted)
+        pca_drifted_non_norm_list.append(pca.fit_transform(X))
 
-    # # Plot PCA results
-    # plt.figure(figsize=(10, 6))
+    # Plot PCA results
+    plt.figure(figsize=(10, 6))
 
-    # # Plot drifted data
-    # plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
+    # Plot drifted data
+    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
 
-    # # Plot original data
-    # plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
+    # Plot original data
+    plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
 
-    # # Plot generated data
-    # plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data', alpha = 0.1)
+    # Plot generated data
+    plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data', alpha = 0.1)
 
-    # # Add labels and legend
-    # plt.xlabel('Principal Component 1')
-    # plt.ylabel('Principal Component 2')
-    # plt.legend()
-    # plt.title(f"Principal Component Analysis iter {i}")
-    # plt.grid(True)
+    # Add labels and legend
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    plt.legend()
+    plt.title(f"Principal Component Analysis iter {i}")
+    plt.grid(True)
 
-    # # Show plot
-    # plt.show()
+    # Show plot
+    plt.show()
 
     #Store the data for distance calculations
     drifted_list.append(X)
@@ -155,12 +159,8 @@ distances_og_gen = []
 distances_og_drift = []
 
 for i,drifted_data in enumerate(drifted_list):
-    distances_og_drift.append(np.mean(np.abs(drifted_data - X_og)))
-    distances_og_gen.append(np.mean(np.abs(generated_list[i] - X_og)))
-
-
-print("len of the entire list", len(distances_og_drift))
-print("len of a single thingy", distances_og_drift[0].shape)
+    distances_og_drift.append(np.mean(np.abs(drifted_data - X_og[:no_samples])))
+    distances_og_gen.append(np.mean(np.abs(generated_list[i] - X_og[:no_samples])))
 
 fig, ax1 = plt.subplots()
 
@@ -194,18 +194,11 @@ plt.show()
 
 
 
-colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
-for i,pca_drifted in enumerate(pca_drifted_list):
+colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#0000ff', '#ffa500', '#808000']
+for i, pca_drifted in enumerate(pca_drifted_list):
     print("Iter ", i)
-    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c=colors[i], marker = 'o', label=f'Iter {i}')
+    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c=colors[i], marker = 'o', label=f'Iter {3*i}')
 
 plt.legend()
 plt.title("Differences in data distributions influenced by the drift")
-plt.show()
-
-for i,pca_drifted in enumerate(pca_drifted_non_norm_list):
-    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c=colors[i], marker = 'o', label=f'Iter {i}')
-
-plt.legend()
-plt.title("Differences in data distributions influenced by the drift not normalized")
 plt.show()

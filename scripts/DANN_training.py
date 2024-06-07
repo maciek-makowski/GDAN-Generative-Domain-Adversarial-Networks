@@ -73,37 +73,6 @@ class GDANN(models.Model):
         return model
     
     def build_domain_discriminator(self, data_shape = (11,1), n_classes = 10):
-        # # generic features extracted representation always real 
-        # in_src_dist = Input(shape=data_shape)
-        # # original distribution of timestep 0 either fake or real 
-        # in_target_dist = Input(shape=data_shape)
-        # # concatenate images channel-wise
-        # merged = Concatenate()([in_src_dist, in_target_dist])
-        # disc = Dense(512, activation='relu')(merged)
-        # disc = Dense(1024, activation='relu')(disc)
-        # disc = Dropout(0.25)(disc)
-        # disc = Dense(512, activation='relu')(disc)
-        # disc = Dropout(0.25)(disc)
-        # disc = Dense(128, activation='relu')(disc)
-        # #real/fake output
-        # disc = Flatten()(disc)
-        # out1 = Dense(1, activation='sigmoid', name = 'real_fake')(disc)
-        # #class label output 
-        # out2 = Dense(n_classes, activation='softmax', name = 'category')(disc)
-        # # define model
-        # model = Model([in_src_dist, in_target_dist], [out1, out2])
-        # # compile model
-        # opt = Adam(learning_rate=0.0002, beta_1=0.5)
-        # #model.summary()
-        # model.compile(
-        #     loss ={'real_fake':'binary_crossentropy', 'category':'sparse_categorical_crossentropy'},
-        #     optimizer=opt, metrics = ['accuracy', 'accuracy'])
-        
-        # plot_model(model, to_file='discriminator.png', show_shapes=True, show_layer_names=True)
-
-
-
-
         ### SAME CODE AS ABOVE BUT FEWER PARAMETERS 
         # # generic features extracted representation always real 
         # in_src_dist = Input(shape=data_shape)
@@ -205,7 +174,7 @@ class GDANN(models.Model):
         # # image generator input
         # in_datapoint = Input(shape=input_shape)
         # # foundation for a 11x1 datapoint, first no is number of feature maps
-        # n_nodes = 64 
+        # n_nodes = 64
         # gen = Dense(n_nodes, kernel_initializer=init)(in_datapoint)
         # #gen = Activation('relu')(gen)
         # gen = LeakyReLU()(gen)
@@ -229,26 +198,21 @@ class GDANN(models.Model):
         # gen = BatchNormalization()(gen)
         # gen = Flatten()(gen)
         # gen = Dense(11)(gen)
-        # out_layer = Activation('sigmoid')(gen)
-        # # define model
+        # out_layer = Activation('linear')(gen)
         # model = Model([in_datapoint, in_label], out_layer)
-
-
-
-        #### SAME CODE AS ABOVE BUT FEWER PARAMETERS  
-
-        # weight initialization
+        ## MAKING THE GENERATOR BIGGER THAN THE ABOVE
+         # weight initialization
         init = RandomNormal(stddev=0.02)
-        # label input
-        in_label = Input(shape=(1,))
-        # embedding for categorical input
-        li = Embedding(n_classes, 50)(in_label)
-        # linear multiplication
-        n_nodes = self.no_features
-        li = Dense(n_nodes, kernel_initializer=init)(li)
-        # treat one datapoint as an additional feature map of size no_featurex1x1
-        li = Reshape((self.no_features,1))(li)
-        # image generator input
+        # # label input
+        # in_label = Input(shape=(1,))
+        # # embedding for categorical input
+        # li = Embedding(n_classes, 50)(in_label)
+        # # linear multiplication
+        # n_nodes = self.no_features
+        # li = Dense(n_nodes, kernel_initializer=init)(li)
+        # # treat one datapoint as an additional feature map of size no_featurex1x1
+        # li = Reshape((self.no_features,1))(li)
+        # # image generator input
         in_datapoint = Input(shape=input_shape)
         # foundation for a 11x1 datapoint, first no is number of feature maps
         n_nodes = 64
@@ -258,16 +222,22 @@ class GDANN(models.Model):
         gen = Flatten()(gen)
         gen = Reshape((self.no_features,64))(gen)
         # merge image gen and label input
-        merge = Concatenate()([gen, li])
+        # merge = Concatenate()([gen, li])
         ## The output shape of merge should be 11x1x64 now upsample 11 and then downsample back to 11
         ## Here you need to do the encoding decoding from pix2pix
-        gen = Conv1DTranspose(128, kernel_size=6, strides=2)(merge)
+        gen = Conv1DTranspose(128, kernel_size=4, strides=2)(gen)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
-        gen = Conv1DTranspose(256, kernel_size=8, strides=4)(gen)
+        gen = Conv1DTranspose(256, kernel_size=4, strides=4)(gen)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
-        gen = Conv1D(256, kernel_size = 10, strides=2)(gen)
+        gen = Conv1DTranspose(256, kernel_size=4, strides=4)(gen)
+        gen = LeakyReLU()(gen)
+        gen = BatchNormalization()(gen)
+        gen = Conv1D(256, kernel_size=8, strides=4)(gen)
+        gen = LeakyReLU()(gen)
+        gen = BatchNormalization()(gen)
+        gen = Conv1D(128, kernel_size = 6, strides=2)(gen)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
         gen = Conv1D(128, kernel_size = 4, strides=2)(gen)
@@ -275,16 +245,9 @@ class GDANN(models.Model):
         gen = BatchNormalization()(gen)
         gen = Flatten()(gen)
         gen = Dense(11)(gen)
-        #test different activation
-        #Either map it to (-3,3)
-        #scaling_factor = 10
-        #out_layer = Activation(lambda x: scaling_factor * tf.keras.activations.tanh(x))(gen)
-        #here it gets mapped to (-1,1)
-        #out_layer = Activation('tanh')(gen)
-        # define model
         out_layer = Activation('linear')(gen)
-        model = Model([in_datapoint, in_label], out_layer)
-
+        model = Model([in_datapoint], out_layer)
+        
 
         return model
     
@@ -293,13 +256,14 @@ class GDANN(models.Model):
         # define the source image
         in_src = Input(shape=data_shape)
         #define class 
-        in_class = Input(shape = (1,))
+        # in_class = Input(shape = (1,))
         # connect the source image to the generator input
-        gen_out = g_model([in_src, in_class])
+        # gen_out = g_model([in_src, in_class])
+        gen_out = g_model([in_src])
         # connect the source input and generator output to the discriminator input
         dis_output = d_model([gen_out, in_src])
         # define gan model as taking noise and label and outputting real/fake and label outputs
-        model = Model(inputs = [in_src ,in_class], outputs = [dis_output[0], dis_output[1], gen_out])
+        model = Model(inputs = [in_src], outputs = [dis_output[0], dis_output[1], gen_out])
         # compile model
         opt = Adam(learning_rate=0.001)
         model.compile(loss=['binary_crossentropy','sparse_categorical_crossentropy','mae'], optimizer=opt)
@@ -321,7 +285,7 @@ def generate_real_samples(dataset, first_dist, len_single_domain, c_labels, d_la
     return datapoints, original_datapoints, class_labels, domain_labels
 
     
-def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  num_epochs = 100, batch_size = 1024, feature_extractor_training_time = 150):
+def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  num_epochs = 50, batch_size = 1024, feature_extractor_training_time = 150):
     domain_labels = []
     iterations_data = []
 
@@ -363,17 +327,19 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
                 #Train discriminator on real distributions
                 noisy_factor = 0.1
                 features = model.feature_extractor(datapoints)
-                noisy_features = features + tf.convert_to_tensor(noisy_factor * np.random.normal(loc=0.0, scale=1.0, size=features.shape), dtype=features.dtype)
-                discriminator_output = model.discriminator([tf.convert_to_tensor(original_points), noisy_features])
-                binary_loss_real = tf.keras.losses.binary_crossentropy(0.9 * tf.ones_like(discriminator_output[0]), discriminator_output[0])
-                #category_loss_real = tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output[1])
+                # noisy_features = features + tf.convert_to_tensor(noisy_factor * np.random.normal(loc=0.0, scale=1.0, size=features.shape), dtype=features.dtype)
+                # discriminator_output = model.discriminator([tf.convert_to_tensor(original_points), noisy_features])
+                discriminator_output = model.discriminator([tf.convert_to_tensor(original_points), features])
+                # binary_loss_real = tf.keras.losses.binary_crossentropy(0.9 * tf.ones_like(discriminator_output[0]), discriminator_output[0])
+                binary_loss_real = tf.keras.losses.binary_crossentropy(tf.ones_like(discriminator_output[0]), discriminator_output[0])
                 category_loss_real = tf.keras.losses.binary_crossentropy(tf.reshape(domain_labels_tensor, (-1,1)), discriminator_output[1])
                 
                 #Train discriminator on generated distributions
-                generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
-                noisy_generated = generated_t0 + tf.convert_to_tensor(noisy_factor * np.random.normal(loc=0.0, scale=1.0, size=generated_t0.shape), dtype=generated_t0.dtype)
-                discriminator_output_fake = model.discriminator([noisy_generated, features])
-                binary_loss_fake = tf.keras.losses.binary_crossentropy(tf.zeros_like(discriminator_output_fake[0]) + 0.1, discriminator_output_fake[0])
+                # generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
+                generated_t0 = model.generator([features])
+                # noisy_generated = generated_t0 + tf.convert_to_tensor(noisy_factor * np.random.normal(loc=0.0, scale=1.0, size=generated_t0.shape), dtype=generated_t0.dtype)
+                discriminator_output_fake = model.discriminator([generated_t0, features])
+                binary_loss_fake = tf.keras.losses.binary_crossentropy(tf.zeros_like(discriminator_output_fake[0]) , discriminator_output_fake[0])
                 #category_loss_fake = tf.keras.losses.sparse_categorical_crossentropy(domain_labels_tensor, discriminator_output_fake[1])
                 category_loss_fake = tf.keras.losses.binary_crossentropy(tf.reshape(domain_labels_tensor, (-1,1)), discriminator_output_fake[1])
 
@@ -396,9 +362,10 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
                         layer.trainable = False
 
 
-                generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
+                # generated_t0 = model.generator([features, tf.convert_to_tensor(domain_labels)])
+                generated_t0 = model.generator([features])
                 discriminator_output = model.discriminator([generated_t0, features])
-                generator_binary_loss = tf.keras.losses.binary_crossentropy(0.9 * tf.ones_like(discriminator_output[0]), discriminator_output[0])
+                generator_binary_loss = tf.keras.losses.binary_crossentropy(tf.ones_like(discriminator_output[0]), discriminator_output[0])
                 #generator_category_loss = tf.keras.losses.sparse_categorical_crossentropy(tf.convert_to_tensor(domain_labels),discriminator_output[1])
                 generator_category_loss = tf.keras.losses.binary_crossentropy(tf.reshape(tf.convert_to_tensor(domain_labels),(-1,1)),discriminator_output[1])
                 #mae_between_distributions = np.mean(np.abs(original_points - generated_t0), axis = 1)
@@ -449,7 +416,7 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
             predicted_class_labels = tf.cast(predicted_class_labels_probabilities >= 0.5, tf.int32)
             train_accuracy_class = accuracy_score(test_class_labels, predicted_class_labels)
 
-            generated_t0 = model.generator([features, tf.convert_to_tensor(test_domain_labels)])
+            generated_t0 = model.generator([features])
             disc_output = model.discriminator([generated_t0, features])
             predicted_domain_probabilities = disc_output[1]
             #predicted_domain_class = np.argmax(predicted_domain_probabilities, axis=1)
