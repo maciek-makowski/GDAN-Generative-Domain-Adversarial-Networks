@@ -70,13 +70,13 @@ drifted_list = []
 generated_list = []
 
 #testing loop 
-num_test_iters = 20
+num_test_iters = 10
 for i in range(num_test_iters):
     X,Y = shift_dist(no_samples, theta, no_features, strat_features)
 
     feature_rep_entire_df = model.feature_extractor(X)
-    # generated_rep_entire_df = model.generator([feature_rep_entire_df, tf.zeros_like(Y)])
-    generated_rep_entire_df = model.generator([feature_rep_entire_df])
+    generated_rep_entire_df = model.generator([feature_rep_entire_df, tf.zeros_like(Y)])
+    # generated_rep_entire_df = model.generator([feature_rep_entire_df])
 
     # normalized_drift = scaler.fit_transform(X)
     # normalized_generated = scaler.fit_transform(generated_rep_entire_df)
