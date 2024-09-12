@@ -1,4 +1,5 @@
-{\rtf1}
+concatenated_dataframe_in_first_thesis_draft.csv
+GDANN_arch.weights_in_first_thesis_draft.h5
 misc/
 papers_for_the_plane/
 pictures_for_the_thesis/
@@ -6,5 +7,4 @@ GiveMeSomeCredit/
 results/
 model_weights/
 cluster_results/
-concatenated_dataframe_in_first_thesis_draft.csv
-GDANN_arch.weights_in_first_thesis_draft.h5
+
