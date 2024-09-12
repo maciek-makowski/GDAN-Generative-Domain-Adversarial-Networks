@@ -6,3 +6,5 @@ GiveMeSomeCredit/
 results/
 model_weights/
 cluster_results/
+concatenated_dataframe_in_first_thesis_draft.csv
+GDANN_arch.weights_in_first_thesis_draft.h5
