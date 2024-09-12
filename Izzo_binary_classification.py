@@ -1,56 +1,57 @@
-import sys 
 import numpy as np 
-import pygad
+import tensorflow as tf
 import matplotlib.pyplot as plt
-from scripts.Izzo_utils import shift_dist, fit 
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import GridSearchCV
-from sklearn.metrics import accuracy_score
-# from scripts.DANN_training import DANN, train_dann_model
-from scripts.DANN_training import GDANN, train_architecture
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
-import tensorflow as tf
+from scripts.DANN_training import GDANN, train_architecture
+from scripts.Izzo_utils import shift_dist, fit 
+from sklearn.metrics import accuracy_score
 
 
+###Define constants
 num_iters = 10
 no_samples = 20000
 no_features = 11
-# strat_features = np.ones(no_features)
+
+###Define strategic features, which will be modified by the drift
 strat_features = np.zeros(no_features)
 strat_features[0:int(0.5*no_features)] = np.ones(int(0.5*no_features)) 
-#theta = np.random.randn(no_features)
 theta = np.ones(no_features)
-print(theta)
 
-### Try to specify the models better, cause there is divergence in accuracies between methods
+### Define logistic regression models and other objects
 logreg = LogisticRegression(C = 0.01, penalty='l2')
 retrained_logreg = LogisticRegression(C = 0.01, penalty='l2')
 model = GDANN(no_features = 11, no_domain_classes = 1)
 scaler = StandardScaler()
 pca = PCA(n_components = 2)
 
+###Create distribution t_0
 X,Y = shift_dist(no_samples, theta, no_features, strat_features)
 X_og = X
 Y_og = Y
 
+### Fit logistic regression to t_0 and measure baseline accuracy 
 logreg.fit(X,Y)
 theta = logreg.coef_[0].T
-
 baseline_accuracy = accuracy_score(Y, logreg.predict(X))
 print("Baseline accuracy",baseline_accuracy)
 
+### Create distribution t_1
 X,Y = shift_dist(no_samples, theta, no_features, strat_features)
 
+### Define lists 
 X_iterations = []
 Y_iterations = []
-
 X_iterations.append(X_og)
 Y_iterations.append(Y_og)
 X_iterations.append(X)
 Y_iterations.append(Y)
 
+###Train the architecture 
 # train_architecture(model, X_og, X_iterations, Y_iterations)
+
+###Load model weights
 model.load_weights("GDANN_arch.weights.h5")
 # # # model.load_weights("./model_weights/GDANN_IZZO_28_05.weights.h5")
 
@@ -62,26 +63,23 @@ accuracies_og_model = []
 accuracies_ret_model = []
 accuracies_gen_rep = []
 accuracies_DANN_model = []
-
 pca_drifted_list = []
 pca_drifted_non_norm_list = []
-
 drifted_list = []
 generated_list = []
 
-#testing loop 
-num_test_iters = 10
+### Create the testing loop
+num_test_iters = 20
 for i in range(num_test_iters):
+    ### Create distribution t_i 
     X,Y = shift_dist(no_samples, theta, no_features, strat_features)
 
     feature_rep_entire_df = model.feature_extractor(X)
-    generated_rep_entire_df = model.generator([feature_rep_entire_df, tf.zeros_like(Y)])
-    # generated_rep_entire_df = model.generator([feature_rep_entire_df])
+    generated_rep_entire_df = model.generator([feature_rep_entire_df])
 
     # normalized_drift = scaler.fit_transform(X)
     # normalized_generated = scaler.fit_transform(generated_rep_entire_df)
     # normalized_X = scaler.fit_transform(X_og)
-
     # pca_drifted = pca.fit_transform(normalized_drift)
     # pca_original = pca.fit_transform(normalized_X)
     # pca_generated = pca.fit_transform(normalized_generated)
@@ -90,7 +88,7 @@ for i in range(num_test_iters):
     pca_original = pca.fit_transform(X_og)
     pca_generated = pca.fit_transform(generated_rep_entire_df)
 
-    if i % 3 == 0:
+    if i == 0 or i % 3 == 1 and i !=1:
         pca_drifted_list.append(pca_drifted)
         pca_drifted_non_norm_list.append(pca.fit_transform(X))
 
@@ -120,7 +118,7 @@ for i in range(num_test_iters):
     drifted_list.append(X)
     generated_list.append(generated_rep_entire_df)
 
-    #Retraining 
+    #Retrain the logistic regression every third iteration
     retrained_logreg.fit(X, Y)
     if i % 3 == 0 and i != 0: theta = retrained_logreg.coef_[0].T
     print("RETRAINED THETA", theta, "Iteration", i)
@@ -135,6 +133,7 @@ for i in range(num_test_iters):
     accuracies_gen_rep.append(accuracy_score(Y, logreg.predict(generated_rep_entire_df)))
     accuracies_DANN_model.append(accuracy_score(Y, predicted_class_labels))
 
+###Plotting and printing for evaluation 
 iterations = np.arange(num_test_iters)
 
 
@@ -197,8 +196,9 @@ plt.show()
 colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k', '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf', '#0000ff', '#ffa500', '#808000']
 for i, pca_drifted in enumerate(pca_drifted_list):
     print("Iter ", i)
-    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c=colors[i], marker = 'o', label=f'Iter {3*i}')
+    plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c=colors[i], marker = 'o', label=f'Iter {3*i + 1}')
 
 plt.legend()
 plt.title("Differences in data distributions influenced by the drift")
+plt.grid(True)
 plt.show()
