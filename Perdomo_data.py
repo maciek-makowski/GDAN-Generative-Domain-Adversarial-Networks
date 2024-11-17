@@ -1,5 +1,8 @@
 import numpy as np 
 import matplotlib.pyplot as plt
+import tensorflow as tf
+import seaborn as sns
+import random
 from scripts.data_prep_GMSC import load_data
 from scripts.optimization import logistic_regression, evaluate_loss
 from scripts.strategic import best_response
@@ -8,8 +11,6 @@ from sklearn.metrics import accuracy_score
 from sklearn.decomposition import PCA
 from sklearn.decomposition import PCA
 from mpl_toolkits.mplot3d import Axes3D
-import tensorflow as tf
-import random
 
 from sklearn.linear_model import LogisticRegression
 
@@ -57,7 +58,7 @@ Y_iterations.append(Y)
 # model.load_weights("GDANN_arch.weights.h5")
 # # # # #The model below might be the one that provides best results 
 # model.load_weights("./model_weights/GDANN_22_06.weights.h5")
-model.load_weights("./cluster_results/GDANN_arch_11_09.weights.h5")
+model.load_weights("./cluster_results/GDANN_arch_21_09.weights.h5")
 accuracies_og_model = []
 accuracies_ret_model = []
 accuracies_gen_rep = []
@@ -155,6 +156,50 @@ for i in range(num_test_iters):
         plt.show()
 
 
+        # Create a figure with subplots
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6))  # 1 row, 3 columns, figure size
+
+        # Plot KDE for each selected column of X_strat
+        sns.kdeplot(X_strat[:, 0], ax=axes[0], fill=True, color="blue", label='influenced by the drift')
+        sns.kdeplot(X[:, 0], ax=axes[0], fill=True, color="red", label="original")
+        sns.kdeplot(generated_rep_entire_df[:, 0], ax=axes[0], fill=True, color="green", label="generated")
+        axes[0].set_title('KDE Plot for feature 0')
+        axes[0].set_xlabel('Value')
+        axes[0].set_ylabel('Density')
+        axes[0].grid(True)
+        axes[0].legend()
+        axes[0].set_xlim(-1,1)
+
+        sns.kdeplot(X_strat[:, 5], ax=axes[1], fill=True, color="blue", label='influenced by the drift')
+        sns.kdeplot(X[:, 5], ax=axes[1], fill=True, color="red", label="original")
+        sns.kdeplot(generated_rep_entire_df[:, 5], ax=axes[1], fill=True, color="green", label="generated")
+        axes[1].set_title('KDE Plot for feature 6')
+        axes[1].set_xlabel('Value')
+        axes[1].set_ylabel('Density')
+        axes[1].grid(True)
+        axes[1].legend()
+        axes[1].set_xlim(-8,8)
+
+        sns.kdeplot(X_strat[:, 7], ax=axes[2], fill=True, color="blue", label='influenced by the drift')
+        sns.kdeplot(X[:, 7], ax=axes[2], fill=True, color="red", label="original")
+        sns.kdeplot(generated_rep_entire_df[:, 7], ax=axes[2], fill=True, color="green", label="generated")
+        axes[2].set_title('KDE Plot for feature 8')
+        axes[2].set_xlabel('Value')
+        axes[2].set_ylabel('Density')
+        axes[2].grid(True)
+        axes[2].legend()
+        axes[2].set_xlim(-14,14)
+
+        # Add the overall figure title using suptitle
+        fig.suptitle(f"Kernel Density Estimation of the Performative Features - Iteration {i}", fontsize=16)
+
+        # Adjust layout for better spacing
+        plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the suptitle
+
+        # Display the plots
+        plt.show()
+
+
     #Retrain the logistic regression on t_i
     retrained_logreg.fit(X_strat, Y)
 
@@ -227,20 +272,21 @@ plt.show()
 
 ### BOXPLOTS TO SHOW DIFFERENCES BETWEEN THE GENERATED AND DRIFTED ################################################
 for iter in [0,9]:
-    fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(20, 15), sharey=True)
+    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(20, 15), sharey=True)
     axes = axes.flatten()
-
-    for feature in range(11):
+    j = 0 
+    for feature in [0,5,7]:
         # Collect data for the current feature
         feature_data = [X[:, feature], drifted_list[iter][:, feature], generated_list[iter][:, feature]]
         # Create a boxplot in the respective subplot
-        axes[feature].boxplot(feature_data, patch_artist=True, labels=['Distribution t0', 'Distribution ti', 'Generated'], vert = False)
-        axes[feature].set_title(f'Feature {feature + 1}')
-        axes[feature].grid(True)
+        axes[j].boxplot(feature_data, patch_artist=True, labels=['Distribution t0', 'Distribution ti', 'Generated'], vert = False)
+        axes[j].set_title(f'Feature {feature + 1}')
+        axes[j].grid(True)
+        j = j+1
 
     # Remove any unused subplots (in this case, the last one)
-    for i in range(11, 12):
-        fig.delaxes(axes[i])
+    # for i in range(11, 12):
+    #     fig.delaxes(axes[i])
 
     # Adjust layout
     # plt.tight_layout()
