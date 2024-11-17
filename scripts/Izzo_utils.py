@@ -97,3 +97,51 @@ def hessian(X, theta, reg):
         hess += np.outer(w[i] * X[i], X[i])
     hess += n * reg * np.eye(d)
     return hess
+
+
+def generate_Izzo_latex_table(accuracy_dict_all_runs):
+    num_iterations = len(next(iter(accuracy_dict_all_runs.values()))[0])  # Get the number of iterations (columns)
+    already_printed = 0
+    # Print the LaTeX table header
+    print("\\begin{table}[h!]")
+    print("    \\centering")
+    print("    \\begin{tabular}{@{}p{2.5cm}|" + "p{1cm}" * min(10, num_iterations) + "@{}}")
+    print("    \\toprule")
+    print("        Metric/iter & " + "&".join([str(i+1) for i in range(min(10, num_iterations))]) + " \\\\")
+    print("        \\midrule")
+
+    for name, values in accuracy_dict_all_runs.items():
+        mean_vals = np.mean(values, axis=0)
+        std_vals = np.std(values, axis=0)
+        
+        # Print the first set of up to 10 iterations
+        print(f"        \\makecell{{\\raggedright {name}}} ", end="")
+        for mean, std in zip(mean_vals[:10], std_vals[:10]):
+            if "Acc" in name: 
+                print(f"& \\makecell{{\\textbf{{{(100*mean):.2f}}} \\\\ \\pm{(100*std):.2f}}} ", end="")
+            else:
+                 print(f"& \\makecell{{\\textbf{{{mean:.2f}}} \\\\ \\pm{std:.3f}}} ", end="")
+    
+        print("\\\\")
+
+        # If there are more than 10 iterations, print the second set in a new row
+        if num_iterations > 10:
+            if already_printed == 0:
+                print("        \\midrule")
+                print("        Metric/iter & " + "&".join([str(i+1) for i in range(11, num_iterations + 1)]) + " \\\\")
+                print("        \\midrule")
+                already_printed = 1
+            
+            # Print the metric name again and the next set of iterations
+            print(f"        \\makecell{{\\raggedright {name}}} ", end="")
+            for mean, std in zip(mean_vals[10:], std_vals[10:]):
+                if "Acc" in name: 
+                    print(f"& \\makecell{{\\textbf{{{(100*mean):.2f}}} \\\\ \\pm{(100*std):.2f}}} ", end="")
+                else:
+                    print(f"& \\makecell{{\\textbf{{{mean:.2f}}} \\\\ \\pm{std:.3f}}} ", end="")
+            print("\\\\")
+
+    print("    \\bottomrule")
+    print("    \\end{tabular}")
+    print("    \\label{tab:results}")
+    print("\\end{table}")

@@ -5,7 +5,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 from scripts.DANN_training import GDANN, train_architecture
-from scripts.Izzo_utils import shift_dist, fit 
+from scripts.Izzo_utils import shift_dist, generate_Izzo_latex_table
 from sklearn.metrics import accuracy_score
 
 
@@ -53,7 +53,7 @@ Y_iterations.append(Y)
 
 ###Load model weights
 # model.load_weights("GDANN_arch.weights.h5")
-model.load_weights("./cluster_results/GDANN_arch_Izzo_26_09.weights.h5")
+model.load_weights("./cluster_results/GDANN_arch_Izzo_5k.weights.h5")
 
 #Change the no_points not to overload the memory
 no_samples = 10000
@@ -165,10 +165,10 @@ for _ in range(20):
 # Store results in a dictionary for easier access
 print ("Distance og gen", distances_og_gen_all_exp)
 accuracy_dict_all_runs = {
-    "accuracies_og_model": np.array(accuracies_og_model_all_exp),
-    "accuracies_ret_model": np.array(accuracies_ret_model_all_exp),
-    "accuracies_gen_rep": np.array(accuracies_gen_rep_all_exp),
-    "accuracies_DANN_model": np.array(accuracies_DANN_model_all_exp),
+    "Acc $M_0$": np.array(accuracies_og_model_all_exp),
+    "Acc $M_{ret}$": np.array(accuracies_ret_model_all_exp),
+    "Acc $M_g$": np.array(accuracies_gen_rep_all_exp),
+    "Acc $M_{LC}$": np.array(accuracies_DANN_model_all_exp),
     "distance_og_drift": np.array(distances_og_drift_all_exp),
     "distance_og_gen": np.array(distances_og_gen_all_exp)
 }
@@ -180,7 +180,7 @@ for name, values in accuracy_dict_all_runs.items():
     print(f"{name}: Mean = {mean_val}, Std Dev = {std_val}")
     print(f"{name}:{values}")
 
-
+generate_Izzo_latex_table(accuracy_dict_all_runs)
 import sys 
 sys.exit()
 print("Iteration", iterations, iterations.shape)
