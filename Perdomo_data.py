@@ -1,7 +1,6 @@
 import numpy as np 
 import matplotlib.pyplot as plt
-from scripts.data_prep_GMSC import load_data
-from scripts.optimization import logistic_regression, evaluate_loss
+from scripts.data_prep_GMSC import load_data, print_Perdomo_table
 from scripts.strategic import best_response
 from scripts.DANN_training import GDANN, train_architecture
 from sklearn.metrics import accuracy_score
@@ -49,8 +48,8 @@ lr_coefficients_list = []
 
 
 ## For multiple experiments
-num_experiments = 10
-num_test_iters = 10
+num_experiments = 2
+num_test_iters = 2
 
 accuracies_og_model_all_exp = []
 accuracies_ret_model_all_exp = []
@@ -104,27 +103,6 @@ for elo in range(num_experiments):
         #Generate the distribution ti by moving inducing drift on t_(i-1)
         X_strat = best_response(X_strat, theta, eps, strat_features)      
 
-        #Select random points for testing (hardware limitation)
-        selected_indices = np.random.choice(X_strat.shape[0], size = 5, replace = False)
-        selected_points = X_strat[selected_indices]
-        selected_labels = Y[selected_indices]
-
-        #Generate the domain-invariant representation and the mapping back to t0 for selected points
-        feature_rep = model.feature_extractor(selected_points)
-        generated_rep = model.generator([feature_rep])
-
-        #Plotting of individual points
-        # for j,point in enumerate(selected_points):
-        #     if i == 0 or i==1 or i ==9:
-        #         plt.scatter(np.arange(11), point, label='Influenced by the drift', marker='o')
-        #         plt.scatter(np.arange(11), X[selected_indices[j]], label='Original', marker='s')
-        #         plt.scatter(np.arange(11), generated_rep[j], label='Generated', marker='^')
-        #         plt.xlabel('Index')
-        #         plt.ylabel('Value')
-        #         plt.title(f'Generated vs Drifted vs OG iteration {i}')
-        #         plt.legend()
-        #         plt.show()
-        
         #Generate the domain-invariant representation and the mapping back to t0 for the entire df
         feature_rep_entire_df = model.feature_extractor(X_strat)
         generated_rep_entire_df = model.generator([feature_rep_entire_df])
@@ -132,37 +110,6 @@ for elo in range(num_experiments):
         ## Append for the distance calculation 
         drifted_list.append(X_strat)
         generated_list.append(generated_rep_entire_df)
-
-        # #Create PCA clusters visualization 
-        # if i == 0 or i == 9 or i == 5: 
-        #     pca_drifted = pca.fit_transform(X_strat)
-        #     pca_original = pca.fit_transform(X)
-        #     pca_generated = pca.fit_transform(generated_rep_entire_df)
-
-        #     # Plot PCA results
-        #     plt.figure(figsize=(10, 6))
-
-        #     # Plot drifted data
-        #     plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
-
-        #     # Plot original data
-        #     plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
-
-        #     # Plot generated data
-        #     plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data')
-
-        #     # Add labels and legend
-        #     plt.xlabel('Principal Component 1')
-        #     plt.ylabel('Principal Component 2')
-        #     plt.title(f'Principal Components iteration {i}')
-        #     plt.legend()
-        #     plt.grid(True)
-
-        #     # Show plot
-        #     plt.show()
-            # output_path = os.path.join(output_dir, f'Principal Components iteration {i}.png')
-            # plt.savefig(output_path)
-
 
         #Retrain the logistic regression on t_i
         retrained_logreg.fit(X_strat, Y)
@@ -202,143 +149,12 @@ for elo in range(num_experiments):
 # Store results in a dictionary for easier access
 print ("Distance og gen", distances_og_gen_all_exp)
 accuracy_dict_all_runs = {
-    "accuracies_og_model": np.array(accuracies_og_model_all_exp),
-    "accuracies_ret_model": np.array(accuracies_ret_model_all_exp),
-    "accuracies_gen_rep": np.array(accuracies_gen_rep_all_exp),
-    "accuracies_DANN_model": np.array(accuracies_DANN_model_all_exp),
+    "Acc $M_0$": np.array(accuracies_og_model_all_exp),
+    "Acc $M_{ret}$": np.array(accuracies_ret_model_all_exp),
+    "Acc $M_g$": np.array(accuracies_gen_rep_all_exp),
+    "Acc $M_{LC}$": np.array(accuracies_DANN_model_all_exp),
     "distance_og_drift": np.array(distances_og_drift_all_exp),
     "distance_og_gen": np.array(distances_og_gen_all_exp)
 }
 
-# Calculate and print the mean and standard deviation for each set of accuracies
-for name, values in accuracy_dict_all_runs.items():
-    mean_val = np.mean(values, axis =0)
-    std_val = np.std(values, axis = 0)
-    print(f"{name}: Mean = {mean_val}, Std Dev = {std_val}")
-    print(f"{name}:{values}")
-
-######################## PLOTTING AND VERYFING RESULTS ################################
-
-accuracy_dict = {
-    "accuracies_og_model": accuracies_og_model,
-    "accuracies_ret_model": accuracies_ret_model,
-    "accuracies_gen_rep": accuracies_gen_rep,
-    "accuracies_DANN_model": accuracies_DANN_model
-}
-
-# Printing the names and values
-for name, values in accuracy_dict.items():
-    print(f"{name}: {values}")
-
-### THE ACCURACY PLOT ###############################3
-
-print("Iteration", iterations, iterations.shape)
-print("Accuracy", accuracies_og_model, len(accuracies_og_model))
-plt.plot(iterations, np.ones_like(iterations)*baseline_accuracy, marker='o',  linestyle=':', color='grey', label = 'Baseline accuracy')
-plt.plot(iterations, accuracies_og_model, marker='o', label='Original LR Model')
-plt.plot(iterations, accuracies_ret_model, marker='o', label='Retrained LR Model')
-plt.plot(iterations, accuracies_gen_rep, marker='o', label='Generated representation with original LR model')
-plt.plot(iterations, accuracies_DANN_model, marker='o', label='DANN Model')
-
-plt.xlabel('Iteration')
-plt.ylabel('Accuracy')
-plt.title('Model Accuracies Over Iterations')
-plt.legend()
-plt.grid(True)
-plt.show()
-# output_path = os.path.join(output_dir, 'Model Accuracies Over Iterations.png')
-# plt.savefig(output_path)
-
-#########PLOT OF THE LR COEFFICIENTS #####################
-# Plot each iteration as a grouped bar
-fig, ax = plt.subplots(figsize=(10, 6))
-data = np.vstack(lr_coefficients_list)
-data_transposed = data.T
-x = np.arange(11)  # Index positions
-width = 0.8 / 10
-for i in range(10):
-    ax.bar(x + i * width, data_transposed[:, i], width=width, label=f'Iteration {i+1}')
-
-ax.set_xlabel('Index')
-ax.set_ylabel('Value')
-ax.set_title('Evolution of each index over 10 iterations')
-ax.set_xticks(x + 0.4)
-ax.set_xticklabels(x)
-ax.legend()
-
-plt.tight_layout()
-plt.show()
-# output_path = os.path.join(output_dir, 'Evolution of each index over 10 iterations.png')
-# plt.savefig(output_path)
-
-### BOXPLOTS TO SHOW DIFFERENCES BETWEEN THE GENERATED AND DRIFTED ################################################
-for iter in [0,9]:
-    fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(20, 15), sharey=True)
-    axes = axes.flatten()
-
-    for feature in range(11):
-        # Collect data for the current feature
-        feature_data = [X[:, feature], drifted_list[iter][:, feature], generated_list[iter][:, feature]]
-        # Create a boxplot in the respective subplot
-        axes[feature].boxplot(feature_data, patch_artist=True, labels=['Distribution t0', 'Distribution ti', 'Generated'], vert = False)
-        axes[feature].set_title(f'Feature {feature + 1}')
-        axes[feature].grid(True)
-
-    # Remove any unused subplots (in this case, the last one)
-    for i in range(11, 12):
-        fig.delaxes(axes[i])
-
-    # Adjust layout
-    # plt.tight_layout()
-    plt.subplots_adjust(hspace=0.3, wspace=0.4)
-    plt.suptitle(f"Boxplot comparison of distributions iteration - {iter}", fontsize = 16)
-    plt.show()
-    # output_path = os.path.join(output_dir, f"Boxplot comparison of distributions iteration - {iter}")
-    # plt.savefig(output_path)
-
-### PLOT OF THE DISTANCES BETWEEN DISTRIBUTIONS ##################################
-
-distances_og_gen = []
-distances_og_drift = []
-
-
-for i,drifted_data in enumerate(drifted_list):
-    distances_og_drift.append(np.mean(np.abs(drifted_data - X)))
-    distances_og_gen.append(np.mean(np.abs(generated_list[i] - X)))
-
-print("Distances drifted original", distances_og_drift)
-print("Distances generated original", distances_og_gen)
-print("Differences from i to i+1", distances_og_drift - distances_og_drift[0])
-fig, ax1 = plt.subplots()
-
-# Plot the accuracies on the primary y-axis
-color1 = 'tab:blue'
-color2 = 'tab:green'
-color3 = 'tab:orange'
-ax1.plot(iterations, accuracies_og_model, marker='o', label='Accuracy original LR Model', color=color1)
-ax1.plot(iterations, accuracies_gen_rep, marker='o', label='Accuracy generated representation with original LR model', color=color2)
-ax1.plot(iterations, accuracies_DANN_model, marker='o', label='Accuracy with the DANN Label classifier', color=color3)
-ax1.set_xlabel('Iterations')
-ax1.set_ylabel('Accuracy', color=color1)
-ax1.tick_params(axis='y', labelcolor=color1)
-ax1.legend(loc='upper left')
-ax1.grid(True, which='both', axis='y', linestyle='--', color=color1, alpha=0.5)
-
-# Create a second y-axis to plot the distances
-ax2 = ax1.twinx()
-color3 = 'tab:red'
-color4 = 'tab:purple'
-ax2.plot(iterations, distances_og_drift, marker='o', label='Distance between original and influenced by the drift', color=color3)
-ax2.plot(iterations, distances_og_gen, marker='o', label='Distance between original and generated', color=color4)
-ax2.set_ylabel('Distance', color=color3)
-ax2.tick_params(axis='y', labelcolor=color3)
-ax2.legend(loc='upper right')
-ax2.grid(True, which='both', axis='y', linestyle='--', color=color3, alpha=0.5)
-
-# Add a title for the entire plot
-plt.title('Accuracies and Distances over Iterations')
-
-# Show the plot
-plt.show()
-# output_path = os.path.join(output_dir, f"Accuracies and Distances over Iterations")
-#  plt.savefig(output_path)
+print_Perdomo_table(accuracy_dict_all_runs)
