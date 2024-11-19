@@ -1,17 +1,14 @@
+import random
+import sys
 import numpy as np 
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import seaborn as sns
-import random
 from scripts.data_prep_GMSC import load_data
-from scripts.optimization import logistic_regression, evaluate_loss
 from scripts.strategic import best_response
 from scripts.DANN_training import GDANN, train_architecture
 from sklearn.metrics import accuracy_score
 from sklearn.decomposition import PCA
-from sklearn.decomposition import PCA
-from mpl_toolkits.mplot3d import Axes3D
-
 from sklearn.linear_model import LogisticRegression
 
 #Load data 
@@ -28,7 +25,7 @@ num_iters = 1
 eps = 10
 method = "RRM"
 
-# Define objects for training the architecture 
+# Define classes 
 model = GDANN(no_features = 11, no_domain_classes = num_iters)
 pca = PCA(n_components = 2)
 logreg = LogisticRegression()
@@ -54,11 +51,13 @@ Y_iterations.append(Y)
 
 #Run the training of the architecture
 # train_architecture(model, X, X_iterations, Y_iterations, num_epochs=2)
+#In case training without evaluation should be performed uncomment
+#sys.exit()
 
-# model.load_weights("GDANN_arch.weights.h5")
-# # # # #The model below might be the one that provides best results 
-# model.load_weights("./model_weights/GDANN_22_06.weights.h5")
-model.load_weights("./cluster_results/GDANN_arch_21_09.weights.h5")
+#Load the model
+model.load_weights("./cluster_results/GDANN_arch_Perdomo_10k_v3.weights.h5")
+
+#Define lists for storing 
 accuracies_og_model = []
 accuracies_ret_model = []
 accuracies_gen_rep = []
@@ -66,6 +65,7 @@ accuracies_DANN_model = []
 
 ## lists for plotting of the distance
 drifted_list = []
+feature_extracted_list = []
 generated_list = []
 lr_coefficients_list = []
 
@@ -81,123 +81,81 @@ for i in range(num_test_iters):
     #Generate the distribution ti by moving inducing drift on t_(i-1)
     X_strat = best_response(X_strat, theta, eps, strat_features)      
 
-    #Select random points for testing (hardware limitation)
-    selected_indices = np.random.choice(X_strat.shape[0], size = 5, replace = False)
-    selected_points = X_strat[selected_indices]
-    selected_labels = Y[selected_indices]
-
-    #Generate the domain-invariant representation and the mapping back to t0 for selected points
-    feature_rep = model.feature_extractor(selected_points)
-    generated_rep = model.generator([feature_rep])
-
-    #Plotting of individual points
-    # for j,point in enumerate(selected_points):
-    #     if i == 0 or i==1 or i ==9:
-    #         plt.scatter(np.arange(11), point, label='Influenced by the drift', marker='o')
-    #         plt.scatter(np.arange(11), X[selected_indices[j]], label='Original', marker='s')
-    #         plt.scatter(np.arange(11), generated_rep[j], label='Generated', marker='^')
-    #         plt.xlabel('Index')
-    #         plt.ylabel('Value')
-    #         plt.title(f'Generated vs Drifted vs OG iteration {i}')
-    #         plt.legend()
-    #         plt.show()
-    
     #Generate the domain-invariant representation and the mapping back to t0 for the entire df
     feature_rep_entire_df = model.feature_extractor(X_strat)
     generated_rep_entire_df = model.generator([feature_rep_entire_df])
 
     ## Append for the distance calculation 
+    feature_extracted_list.append(feature_rep_entire_df)
     drifted_list.append(X_strat)
     generated_list.append(generated_rep_entire_df)
 
-    # #Check the mean and STDS 
-    # mean_drift = np.mean(normalized_drift, axis =0)
-    # mean_gen = np.mean(normalized_generated, axis =0)
-    # mean_og = np.mean(X, axis =0)
+    #Generate a PCA plot demonstrating the outputs of the feature extractor    
+    # if i == (num_test_iters - 1):
+    #     plt.figure(figsize=(10, 6))
+    #     for i,dist in enumerate(feature_extracted_list):
+    #         pca_feature_extracted = pca.fit_transform(dist)
+    #         plt.scatter(pca_feature_extracted[:,0], pca_feature_extracted[:,1], c = [random.random() for _ in range(3)], label=f"Iter {i}")
 
-    # std_drift = np.std(normalized_drift, axis = 0)
-    # std_gen = np.std(normalized_generated, axis = 0)
-    # std_og = np.std(X, axis = 0)
-
-    # normalized_X = scaler.fit_transform(X)
-    # mean_scaled_X = np.mean(normalized_X, axis = 0)
-    # std_scaled_X = np.std(normalized_X, axis = 0)
-
-    # pca_drifted = pca.fit_transform(normalized_drift)
-    # pca_original = pca.fit_transform(normalized_X)
-    # pca_generated = pca.fit_transform(normalized_generated)
+    #     plt.legend()
+    #     plt.title("PCA of the feature extracted representation")
+    #     plt.grid(True)
+    #     plt.show()
 
     #Create PCA clusters visualization 
-    if i == 0 or i == 9 or i == 5: 
-        pca_drifted = pca.fit_transform(X_strat)
-        pca_original = pca.fit_transform(X)
-        pca_generated = pca.fit_transform(generated_rep_entire_df)
+    # if i == 0 or i == 9 or i == 5: 
+    #     pca_drifted = pca.fit_transform(X_strat)
+    #     pca_original = pca.fit_transform(X)
+    #     pca_generated = pca.fit_transform(generated_rep_entire_df)
 
-        # Plot PCA results
-        plt.figure(figsize=(10, 6))
+    #     # Plot PCA results
+    #     plt.figure(figsize=(10, 6))
+    #     plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
+    #     plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
+    #     plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data')
 
-        # Plot drifted data
-        plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
+    #     plt.xlabel('Principal Component 1')
+    #     plt.ylabel('Principal Component 2')
+    #     plt.title(f'Principal Components iteration {i}')
+    #     plt.legend()
+    #     plt.grid(True)
+    #     plt.show()
 
-        # Plot original data
-        plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
+    #     # Generate KDE plots of the performative features
+    #     fig, axes = plt.subplots(1, 3, figsize=(18, 6))  # 1 row, 3 columns, figure size
+    #     sns.kdeplot(X_strat[:, 0], ax=axes[0], fill=True, color="blue", label='influenced by the drift')
+    #     sns.kdeplot(X[:, 0], ax=axes[0], fill=True, color="red", label="original")
+    #     sns.kdeplot(generated_rep_entire_df[:, 0], ax=axes[0], fill=True, color="green", label="generated")
+    #     axes[0].set_title('KDE Plot for feature 0')
+    #     axes[0].set_xlabel('Value')
+    #     axes[0].set_ylabel('Density')
+    #     axes[0].grid(True)
+    #     axes[0].legend()
+    #     axes[0].set_xlim(-1,1)
 
-        # Plot generated data
-        plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data')
+    #     sns.kdeplot(X_strat[:, 5], ax=axes[1], fill=True, color="blue", label='influenced by the drift')
+    #     sns.kdeplot(X[:, 5], ax=axes[1], fill=True, color="red", label="original")
+    #     sns.kdeplot(generated_rep_entire_df[:, 5], ax=axes[1], fill=True, color="green", label="generated")
+    #     axes[1].set_title('KDE Plot for feature 6')
+    #     axes[1].set_xlabel('Value')
+    #     axes[1].set_ylabel('Density')
+    #     axes[1].grid(True)
+    #     axes[1].legend()
+    #     axes[1].set_xlim(-8,8)
 
-        # Add labels and legend
-        plt.xlabel('Principal Component 1')
-        plt.ylabel('Principal Component 2')
-        plt.title(f'Principal Components iteration {i}')
-        plt.legend()
-        plt.grid(True)
+    #     sns.kdeplot(X_strat[:, 7], ax=axes[2], fill=True, color="blue", label='influenced by the drift')
+    #     sns.kdeplot(X[:, 7], ax=axes[2], fill=True, color="red", label="original")
+    #     sns.kdeplot(generated_rep_entire_df[:, 7], ax=axes[2], fill=True, color="green", label="generated")
+    #     axes[2].set_title('KDE Plot for feature 8')
+    #     axes[2].set_xlabel('Value')
+    #     axes[2].set_ylabel('Density')
+    #     axes[2].grid(True)
+    #     axes[2].legend()
+    #     axes[2].set_xlim(-14,14)
 
-        # Show plot
-        plt.show()
-
-
-        # Create a figure with subplots
-        fig, axes = plt.subplots(1, 3, figsize=(18, 6))  # 1 row, 3 columns, figure size
-
-        # Plot KDE for each selected column of X_strat
-        sns.kdeplot(X_strat[:, 0], ax=axes[0], fill=True, color="blue", label='influenced by the drift')
-        sns.kdeplot(X[:, 0], ax=axes[0], fill=True, color="red", label="original")
-        sns.kdeplot(generated_rep_entire_df[:, 0], ax=axes[0], fill=True, color="green", label="generated")
-        axes[0].set_title('KDE Plot for feature 0')
-        axes[0].set_xlabel('Value')
-        axes[0].set_ylabel('Density')
-        axes[0].grid(True)
-        axes[0].legend()
-        axes[0].set_xlim(-1,1)
-
-        sns.kdeplot(X_strat[:, 5], ax=axes[1], fill=True, color="blue", label='influenced by the drift')
-        sns.kdeplot(X[:, 5], ax=axes[1], fill=True, color="red", label="original")
-        sns.kdeplot(generated_rep_entire_df[:, 5], ax=axes[1], fill=True, color="green", label="generated")
-        axes[1].set_title('KDE Plot for feature 6')
-        axes[1].set_xlabel('Value')
-        axes[1].set_ylabel('Density')
-        axes[1].grid(True)
-        axes[1].legend()
-        axes[1].set_xlim(-8,8)
-
-        sns.kdeplot(X_strat[:, 7], ax=axes[2], fill=True, color="blue", label='influenced by the drift')
-        sns.kdeplot(X[:, 7], ax=axes[2], fill=True, color="red", label="original")
-        sns.kdeplot(generated_rep_entire_df[:, 7], ax=axes[2], fill=True, color="green", label="generated")
-        axes[2].set_title('KDE Plot for feature 8')
-        axes[2].set_xlabel('Value')
-        axes[2].set_ylabel('Density')
-        axes[2].grid(True)
-        axes[2].legend()
-        axes[2].set_xlim(-14,14)
-
-        # Add the overall figure title using suptitle
-        fig.suptitle(f"Kernel Density Estimation of the Performative Features - Iteration {i}", fontsize=16)
-
-        # Adjust layout for better spacing
-        plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the suptitle
-
-        # Display the plots
-        plt.show()
+    #     fig.suptitle(f"Kernel Density Estimation of the Performative Features - Iteration {i}", fontsize=16)
+    #     plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the suptitle
+    #     plt.show()
 
 
     #Retrain the logistic regression on t_i
@@ -206,7 +164,6 @@ for i in range(num_test_iters):
     #Updating theta - depending on type of the experiment
     # theta = retrained_logreg.coef_[0]
     lr_coefficients_list.append(theta)
-    print("New reatrained theta", theta)
 
     #Predictions for class labels by DANN
     predicted_class_labels_probabilities = model.label_classifier(feature_rep_entire_df)
@@ -272,24 +229,21 @@ plt.show()
 
 ### BOXPLOTS TO SHOW DIFFERENCES BETWEEN THE GENERATED AND DRIFTED ################################################
 for iter in [0,9]:
-    fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(20, 15), sharey=True)
+    fig, axes = plt.subplots(nrows=3, ncols=4, figsize=(20, 15), sharey=True)
     axes = axes.flatten()
-    j = 0 
-    for feature in [0,5,7]:
+    for feature in range(d+1):
         # Collect data for the current feature
         feature_data = [X[:, feature], drifted_list[iter][:, feature], generated_list[iter][:, feature]]
         # Create a boxplot in the respective subplot
-        axes[j].boxplot(feature_data, patch_artist=True, labels=['Distribution t0', 'Distribution ti', 'Generated'], vert = False)
-        axes[j].set_title(f'Feature {feature + 1}')
-        axes[j].grid(True)
-        j = j+1
+        axes[feature].boxplot(feature_data, patch_artist=True, labels=['Distribution t0', 'Distribution ti', 'Generated'], vert = False)
+        axes[feature].set_title(f'Feature {feature + 1}')
+        axes[feature].grid(True)
 
     # Remove any unused subplots (in this case, the last one)
-    # for i in range(11, 12):
-    #     fig.delaxes(axes[i])
+    for i in range(11, 12):
+        fig.delaxes(axes[i])
 
     # Adjust layout
-    # plt.tight_layout()
     plt.subplots_adjust(hspace=0.3, wspace=0.4)
     plt.suptitle(f"Boxplot comparison of distributions iteration - {iter}", fontsize = 16)
     plt.show()

@@ -50,10 +50,12 @@ Y_iterations.append(Y)
 
 ###Train the architecture 
 # train_architecture(model, X_og, X_iterations, Y_iterations)
+#In case training without evaluation should be performed uncomment
+#sys.exit()
+
 
 ###Load model weights
-model.load_weights("GDANN_arch.weights.h5")
-# # # model.load_weights("./model_weights/GDANN_IZZO_28_05.weights.h5")
+model.load_weights("./model_weights/GDANN_IZZO_28_05.weights.h5")
 
 #Change the no_points not to overload the memory
 no_samples = 10000
@@ -76,13 +78,6 @@ for i in range(num_test_iters):
 
     feature_rep_entire_df = model.feature_extractor(X)
     generated_rep_entire_df = model.generator([feature_rep_entire_df])
-
-    # normalized_drift = scaler.fit_transform(X)
-    # normalized_generated = scaler.fit_transform(generated_rep_entire_df)
-    # normalized_X = scaler.fit_transform(X_og)
-    # pca_drifted = pca.fit_transform(normalized_drift)
-    # pca_original = pca.fit_transform(normalized_X)
-    # pca_generated = pca.fit_transform(normalized_generated)
 
     pca_drifted = pca.fit_transform(X)
     pca_original = pca.fit_transform(X_og)

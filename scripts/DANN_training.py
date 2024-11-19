@@ -1,25 +1,25 @@
 import os
-os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
+import sys
+import keras
 import tensorflow as tf 
 import numpy as np 
 import pandas as pd 
-import sys
-import keras
 from keras.models import Model
 from keras.optimizers import Adam
 from keras.initializers import RandomNormal
-from keras.layers import Conv1D, Dense, Flatten, InputLayer, AveragePooling1D, Reshape, BatchNormalization, Normalization, Dropout, Conv1DTranspose
-from keras.layers import Input, Embedding, LeakyReLU, Conv2D, Conv2DTranspose, Activation, Concatenate
+from keras.layers import Conv1D, Dense, Flatten, AveragePooling1D, Reshape, BatchNormalization, Normalization, Dropout, Conv1DTranspose
+from keras.layers import Input, LeakyReLU, Activation, Concatenate
 from tensorflow.keras import models
 from sklearn.utils import shuffle
 from sklearn.metrics import accuracy_score
 from keras.utils import plot_model
 
-print("Tensorflow version", tf.__version__)
-print("Keras version", keras.__version__)
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
 class GDANN(models.Model):
+    '''
+    Define the GDAN architecture
+    '''
     def __init__(self, no_features, no_domain_classes = 5, task = 'binary_classification'):
         super(GDANN, self).__init__()
         self.task = task
@@ -31,9 +31,6 @@ class GDANN(models.Model):
         self.generator = self.build_generator(input_shape=(feature_extractor_output,1), n_classes= no_domain_classes)
         self.gan_model = self.build_gan(self.generator, self.discriminator, data_shape = (feature_extractor_output,1))
         
-
-       
-    
     def build_feature_extractor(self, input_shape):
         model = keras.models.Sequential()
         model.add(Input(input_shape))
@@ -45,7 +42,6 @@ class GDANN(models.Model):
         model.add(Flatten())
         model.add(Reshape((256, 1)))
         model.add(AveragePooling1D(pool_size=37, strides=20))
-        #model.add(MaxPooling1D(pool_size=37, strides=20))
         model.add(Flatten())
         model.add(Dense(11, input_shape = input_shape))
         model.add(Normalization(mean = np.zeros(11), variance= np.ones(11)))
@@ -60,7 +56,6 @@ class GDANN(models.Model):
     def build_label_classifier(self, input_shape):
         if self.task == 'binary_classification':
             model = tf.keras.Sequential()
-            #model.add(InputLayer(shape = (input_shape,)))
             model.add(Input((input_shape,)))
             model.add(Dense(256,activation= 'relu')) # kernel_regularizer=l2(self.regularization_coeff)
             model.add(Dense(512,activation='relu')) # , kernel_regularizer=l2(self.regularization_coeff)
@@ -166,58 +161,7 @@ class GDANN(models.Model):
         return model
 
     def build_generator(self, input_shape, n_classes=10):
-        # # weight initialization
-        # init = RandomNormal(stddev=0.02)
-        # # label input
-        # in_label = Input(shape=(1,))
-        # # embedding for categorical input
-        # li = Embedding(n_classes, 50)(in_label)
-        # # linear multiplication
-        # n_nodes = self.no_features
-        # li = Dense(n_nodes, kernel_initializer=init)(li)
-        # # treat one datapoint as an additional feature map of size no_featurex1x1
-        # li = Reshape((self.no_features,1))(li)
-        # # image generator input
-        # in_datapoint = Input(shape=input_shape)
-        # # foundation for a 11x1 datapoint, first no is number of feature maps
-        # n_nodes = 64
-        # gen = Dense(n_nodes, kernel_initializer=init)(in_datapoint)
-        # #gen = Activation('relu')(gen)
-        # gen = LeakyReLU()(gen)
-        # gen = Flatten()(gen)
-        # gen = Reshape((self.no_features,64))(gen)
-        # # merge image gen and label input
-        # merge = Concatenate()([gen, li])
-        # ## The output shape of merge should be 11x1x64 now upsample 11 and then downsample back to 11
-        # ## Here you need to do the encoding decoding from pix2pix
-        # gen = Conv1DTranspose(128, kernel_size=6, strides=2)(merge)
-        # gen = LeakyReLU()(gen)
-        # gen = BatchNormalization()(gen)
-        # gen = Conv1DTranspose(256, kernel_size=8, strides=4)(gen)
-        # gen = LeakyReLU()(gen)
-        # gen = BatchNormalization()(gen)
-        # gen = Conv1D(256, kernel_size = 10, strides=2)(gen)
-        # gen = LeakyReLU()(gen)
-        # gen = BatchNormalization()(gen)
-        # gen = Conv1D(128, kernel_size = 4, strides=2)(gen)
-        # gen = LeakyReLU()(gen)
-        # gen = BatchNormalization()(gen)
-        # gen = Flatten()(gen)
-        # gen = Dense(11)(gen)
-        # out_layer = Activation('linear')(gen)
-        # model = Model([in_datapoint, in_label], out_layer)
-        ## MAKING THE GENERATOR BIGGER THAN THE ABOVE
-         # weight initialization
         init = RandomNormal(stddev=0.02)
-        # # label input
-        # in_label = Input(shape=(1,))
-        # # embedding for categorical input
-        # li = Embedding(n_classes, 50)(in_label)
-        # # linear multiplication
-        # n_nodes = self.no_features
-        # li = Dense(n_nodes, kernel_initializer=init)(li)
-        # # treat one datapoint as an additional feature map of size no_featurex1x1
-        # li = Reshape((self.no_features,1))(li)
         # image generator input
         in_datapoint = Input(shape=input_shape)
         # foundation for a 11x1 datapoint, first no is number of feature maps
@@ -225,12 +169,6 @@ class GDANN(models.Model):
         gen = Dense(n_nodes, kernel_initializer=init)(in_datapoint)
         #gen = Activation('relu')(gen)
         gen = LeakyReLU()(gen)
-        # gen = Flatten()(gen)
-        # gen = Reshape((self.no_features,64))(gen)
-        # merge image gen and label input
-        # merge = Concatenate()([gen, li])
-        ## The output shape of merge should be 11x1x64 now upsample 11 and then downsample back to 11
-        ## Here you need to do the encoding decoding from pix2pix
         gen = Conv1DTranspose(128, kernel_size=4, strides=2)(gen)
         gen = LeakyReLU()(gen)
         gen = BatchNormalization()(gen)
@@ -257,14 +195,10 @@ class GDANN(models.Model):
         return model
     
     def build_gan(self, g_model, d_model, data_shape):
-               
         # define the source image
         in_src = Input(shape=data_shape)
-        #define class 
-        # in_class = Input(shape = (1,))
         # connect the source image to the generator input
         gen_out = g_model([in_src])
-        # gen_out = g_model([in_src, in_class])
         # connect the source input and generator output to the discriminator input
         dis_output = d_model([gen_out, in_src])
         # define gan model as taking noise and label and outputting real/fake and label outputs
@@ -272,12 +206,26 @@ class GDANN(models.Model):
         # compile model
         opt = Adam(learning_rate=0.001)
         model.compile(loss=['binary_crossentropy','sparse_categorical_crossentropy','mae'], optimizer=opt)
-        #plot_model(model, to_file='GAN.png', show_shapes=True, show_layer_names=True)
         model.summary()
         return model
 
 # select real samples
 def generate_real_samples(dataset, first_dist, len_single_domain, c_labels, d_labels, n_samples):
+    '''
+    Sample real samples from the t_0 and pair it with the correct class and domain labels
+    dataset: np.array
+        a np.array containing the concatenated t_0 and t_1
+    first_dist: np.array
+        a np.array containing the points from distribution 0 (t_0)
+    len_single_domain: int 
+    c_labels: np.array 
+        an array with combined ground truths 
+    d_labels: np.array 
+        an array with combined domain labels i.e either original dist or a one 
+        influenced by the drift 
+    n_samples: int
+        the number of points that has to be generated 
+    '''
     # Generate random indices
     random_indices = np.random.choice(range(len(dataset)), n_samples)
     datapoints = np.array([dataset[idx] for idx in random_indices])
@@ -292,6 +240,40 @@ def generate_real_samples(dataset, first_dist, len_single_domain, c_labels, d_la
 
     
 def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  num_epochs = 100, batch_size = 1024, feature_extractor_training_time = 350):
+    '''
+    Train the GDAN architecture, defined in GDANN.
+
+    Parameters
+    --------
+        model: GDANN class 
+            a class which defines the architecture, the parameters of each network 
+        first_dist: np.array
+            the array of t_0 data distribution used for matching points 1-to-1 or randomly 
+        data: list of np.arrays
+            a list with numpy arrays, containing the distributions of data used for training 
+            i.e. t_0 and t_1 
+        labels: list of np.arrays
+            a list of numpy arrays alike the point above, but including ground truth instead
+            of feature data 
+        lam: float 
+            hyperparemeter regulating the degree of penaliation of the generator 
+            for producing instances which are located far away from t_0 
+        lambda_2: float 
+            hyperparameter regulating the loss of the feature extractor, modelling the 
+            dependance between feature extractor and the discriminator 
+        num_epochs: int 
+            number of epochs during training 
+        batch_size: int 
+        feature_extractor_training_time: int 
+            hyperparameter
+            the number of steps for which the generator updates are switched off, 
+            the number of steps for which the feature extractor is trained
+    
+    Outputs
+    --------
+        saves the model weights to a h5 file 
+        saves the learning curves into a csv file
+    '''
     domain_labels = []
     iterations_data = []
 
@@ -341,7 +323,6 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
 
                 #Calculte the combined discriminator's loss
                 discriminators_loss = tf.reduce_mean(binary_loss_real + category_loss_real + binary_loss_fake + category_loss_fake)
-            
             
             #Update weights of the discriminator
             discriminators_trainable_vars = model.discriminator.trainable_variables
@@ -408,29 +389,8 @@ def train_architecture(model,first_dist, data, labels,lam = 100, lambda_2 = 1,  
             predicted_domain_probabilities = disc_output[1]
             predicted_domain_class = tf.cast(predicted_domain_probabilities >= 0.5, tf.int32)
 
-
-            print("Category labels probs", predicted_domain_probabilities[:10])
-            print("Category labels", predicted_domain_class[:10])
-            print("True labels", test_domain_labels[:10])
-
             train_accuracy_domain = accuracy_score(predicted_domain_class, test_domain_labels)
-            
-            print("Probs", predicted_class_labels_probabilities[:10])
-            print("Labels", predicted_class_labels[:10])
-            print("True labels ", test_class_labels[:10])
 
-            print("\n")
-            print(f"Training Accuracy:  class - {train_accuracy_class}")
-            print(f"Domain classification accuracy  - {train_accuracy_domain}")
-            print("\n")
-            #PRINT THE LOSSES 
-            print("Discriminator loss", tf.reduce_mean(discriminators_loss).numpy())
-            print("Generator loss", tf.reduce_mean(generator_loss).numpy())
-            print("Generator loss from classification", tf.reduce_mean(generator_binary_loss).numpy())
-            print("Generator loss from distance", tf.reduce_mean(lam * mae_between_distributions).numpy() )
-            print("Feature extractor loss", tf.reduce_mean(encoder_loss).numpy())
-            print("Label loss", tf.reduce_mean(label_loss).numpy())
-            
             # Sample data for one iteration
             iteration_data = {
                 "Probabilities": predicted_domain_probabilities,
