@@ -68,63 +68,6 @@ class GDANN(models.Model):
         return model
     
     def build_domain_discriminator(self, data_shape = (11,1), n_classes = 10):
-        # ## MODEL WITHOUT THE CONCAT
-        # ## Model where og distriubtion and feature map are not concatenated
-        # # generic features extracted representation always real 
-        # in_src_dist = Input(shape=data_shape, name='timestamp_0')
-        # # original distribution of timestep 0 either fake or real 
-        # in_target_dist = Input(shape=data_shape, name = 'features')
-        # # concatenate images channel-wise
-        # bin = Dense(64, activation='leaky_relu')(in_src_dist)
-        # bin = BatchNormalization()(bin)
-        # bin = Dropout(0.25)(bin)
-        # bin = Dense(128, activation='leaky_relu')(bin)
-        # #disc = BatchNormalization()(disc)
-        # bin = Dropout(0.25)(bin)
-        # bin = Dense(512, activation='leaky_relu')(bin)
-        # #disc = BatchNormalization()(disc)
-        # bin = Dropout(0.25)(bin)
-        # bin = Dense(512, activation='leaky_relu')(bin)
-        # #disc = BatchNormalization()(disc)
-        # #real/fake output
-        # bin = Flatten()(bin)
-        # out1 = Dense(1, activation='sigmoid', name = 'real_fake')(bin)
-
-        # multi_class = Dense(64, activation='leaky_relu')(in_target_dist)
-        # multi_class = BatchNormalization()(multi_class)
-        # multi_class = Dropout(0.25)(multi_class)
-        # multi_class = Dense(128, activation='leaky_relu')(multi_class)
-        # #disc = BatchNormalization()(disc)
-        # multi_class = Dropout(0.25)(multi_class)
-        # multi_class = Dense(512, activation='leaky_relu')(multi_class)
-        # #disc = BatchNormalization()(disc)
-        # multi_class = Dropout(0.25)(multi_class)
-        # multi_class = Dense(512, activation='leaky_relu')(multi_class)
-        # #disc = BatchNormalization()(disc)
-        # #real/fake output
-        # multi_class = Flatten()(multi_class)
-
-        # #real/fake output
-        # bin = Flatten()(bin)
-        # out1 = Dense(1, activation='sigmoid', name = 'real_fake')(bin)
-        # #class label output 
-        # #out2 = Dense(n_classes, activation='softmax', name = 'category')(multi_class)
-        # out2 = Dense(n_classes, activation='sigmoid', name = 'category')(multi_class)
-        # # define model
-        # model = Model([in_src_dist, in_target_dist], [out1, out2])
-        # # compile model
-        # opt = Adam(learning_rate=0.0001)
-        # #model.summary()
-        # model.compile(
-        #     loss ={'real_fake':'binary_crossentropy', 'category':'sparse_categorical_crossentropy'},
-        #     optimizer=opt, metrics = ['accuracy', 'accuracy'])
-        
-        # plot_model(model, to_file='discriminator.png', show_shapes=True, show_layer_names=True)
-
-
-
-        ## MODEL WITH THE CONCAT
-        ## Model where og distriubtion and feature map are not concatenated
         # generic features extracted representation always real 
         in_src_dist = Input(shape=data_shape, name='timestamp_0')
         # original distribution of timestep 0 either fake or real 
@@ -135,13 +78,10 @@ class GDANN(models.Model):
         merge = BatchNormalization()(merge)
         merge = Dropout(0.25)(merge)
         merge = Dense(128, activation='leaky_relu')(merge)
-        #disc = BatchNormalization()(disc)
         merge = Dropout(0.25)(merge)
         merge = Dense(512, activation='leaky_relu')(merge)
-        #disc = BatchNormalization()(disc)
         merge = Dropout(0.25)(merge)
         merge = Dense(512, activation='leaky_relu')(merge)
-        #disc = BatchNormalization()(disc)
         #real/fake output
         merge = Flatten()(merge)
         out1 = Dense(1, activation='sigmoid', name = 'real_fake')(merge)
