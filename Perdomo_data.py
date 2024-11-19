@@ -90,72 +90,72 @@ for i in range(num_test_iters):
     drifted_list.append(X_strat)
     generated_list.append(generated_rep_entire_df)
 
-    #Generate a PCA plot demonstrating the outputs of the feature extractor    
-    # if i == (num_test_iters - 1):
-    #     plt.figure(figsize=(10, 6))
-    #     for i,dist in enumerate(feature_extracted_list):
-    #         pca_feature_extracted = pca.fit_transform(dist)
-    #         plt.scatter(pca_feature_extracted[:,0], pca_feature_extracted[:,1], c = [random.random() for _ in range(3)], label=f"Iter {i}")
+    # Generate a PCA plot demonstrating the outputs of the feature extractor    
+    if i == (num_test_iters - 1):
+        plt.figure(figsize=(10, 6))
+        for i,dist in enumerate(feature_extracted_list):
+            pca_feature_extracted = pca.fit_transform(dist)
+            plt.scatter(pca_feature_extracted[:,0], pca_feature_extracted[:,1], c = [random.random() for _ in range(3)], label=f"Iter {i}")
 
-    #     plt.legend()
-    #     plt.title("PCA of the feature extracted representation")
-    #     plt.grid(True)
-    #     plt.show()
+        plt.legend()
+        plt.title("PCA of the feature extracted representation")
+        plt.grid(True)
+        plt.show()
 
-    #Create PCA clusters visualization 
-    # if i == 0 or i == 9 or i == 5: 
-    #     pca_drifted = pca.fit_transform(X_strat)
-    #     pca_original = pca.fit_transform(X)
-    #     pca_generated = pca.fit_transform(generated_rep_entire_df)
+    # Create PCA clusters visualization 
+    if i == 0 or i == 9 or i == 5: 
+        pca_drifted = pca.fit_transform(X_strat)
+        pca_original = pca.fit_transform(X)
+        pca_generated = pca.fit_transform(generated_rep_entire_df)
 
-    #     # Plot PCA results
-    #     plt.figure(figsize=(10, 6))
-    #     plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
-    #     plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
-    #     plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data')
+        # Plot PCA results
+        plt.figure(figsize=(10, 6))
+        plt.scatter(pca_drifted[:, 0], pca_drifted[:, 1], c='blue', marker = '^', label=f'Data that has been influenced by the drift')
+        plt.scatter(pca_original[:, 0], pca_original[:, 1], c='red', marker = 'o', label='Original Data')
+        plt.scatter(pca_generated[:, 0], pca_generated[:, 1], c='green', marker = 's', label='Generated Data')
 
-    #     plt.xlabel('Principal Component 1')
-    #     plt.ylabel('Principal Component 2')
-    #     plt.title(f'Principal Components iteration {i}')
-    #     plt.legend()
-    #     plt.grid(True)
-    #     plt.show()
+        plt.xlabel('Principal Component 1')
+        plt.ylabel('Principal Component 2')
+        plt.title(f'Principal Components iteration {i}')
+        plt.legend()
+        plt.grid(True)
+        plt.show()
 
-    #     # Generate KDE plots of the performative features
-    #     fig, axes = plt.subplots(1, 3, figsize=(18, 6))  # 1 row, 3 columns, figure size
-    #     sns.kdeplot(X_strat[:, 0], ax=axes[0], fill=True, color="blue", label='influenced by the drift')
-    #     sns.kdeplot(X[:, 0], ax=axes[0], fill=True, color="red", label="original")
-    #     sns.kdeplot(generated_rep_entire_df[:, 0], ax=axes[0], fill=True, color="green", label="generated")
-    #     axes[0].set_title('KDE Plot for feature 0')
-    #     axes[0].set_xlabel('Value')
-    #     axes[0].set_ylabel('Density')
-    #     axes[0].grid(True)
-    #     axes[0].legend()
-    #     axes[0].set_xlim(-1,1)
+        # Generate KDE plots of the performative features
+        fig, axes = plt.subplots(1, 3, figsize=(18, 6))  # 1 row, 3 columns, figure size
+        sns.kdeplot(X_strat[:, 0], ax=axes[0], fill=True, color="blue", label='influenced by the drift')
+        sns.kdeplot(X[:, 0], ax=axes[0], fill=True, color="red", label="original")
+        sns.kdeplot(generated_rep_entire_df[:, 0], ax=axes[0], fill=True, color="green", label="generated")
+        axes[0].set_title('KDE Plot for feature 0')
+        axes[0].set_xlabel('Value')
+        axes[0].set_ylabel('Density')
+        axes[0].grid(True)
+        axes[0].legend()
+        axes[0].set_xlim(-1,1)
 
-    #     sns.kdeplot(X_strat[:, 5], ax=axes[1], fill=True, color="blue", label='influenced by the drift')
-    #     sns.kdeplot(X[:, 5], ax=axes[1], fill=True, color="red", label="original")
-    #     sns.kdeplot(generated_rep_entire_df[:, 5], ax=axes[1], fill=True, color="green", label="generated")
-    #     axes[1].set_title('KDE Plot for feature 6')
-    #     axes[1].set_xlabel('Value')
-    #     axes[1].set_ylabel('Density')
-    #     axes[1].grid(True)
-    #     axes[1].legend()
-    #     axes[1].set_xlim(-8,8)
+        sns.kdeplot(X_strat[:, 5], ax=axes[1], fill=True, color="blue", label='influenced by the drift')
+        sns.kdeplot(X[:, 5], ax=axes[1], fill=True, color="red", label="original")
+        sns.kdeplot(generated_rep_entire_df[:, 5], ax=axes[1], fill=True, color="green", label="generated")
+        axes[1].set_title('KDE Plot for feature 6')
+        axes[1].set_xlabel('Value')
+        axes[1].set_ylabel('Density')
+        axes[1].grid(True)
+        axes[1].legend()
+        axes[1].set_xlim(-8,8)
 
-    #     sns.kdeplot(X_strat[:, 7], ax=axes[2], fill=True, color="blue", label='influenced by the drift')
-    #     sns.kdeplot(X[:, 7], ax=axes[2], fill=True, color="red", label="original")
-    #     sns.kdeplot(generated_rep_entire_df[:, 7], ax=axes[2], fill=True, color="green", label="generated")
-    #     axes[2].set_title('KDE Plot for feature 8')
-    #     axes[2].set_xlabel('Value')
-    #     axes[2].set_ylabel('Density')
-    #     axes[2].grid(True)
-    #     axes[2].legend()
-    #     axes[2].set_xlim(-14,14)
+        sns.kdeplot(X_strat[:, 7], ax=axes[2], fill=True, color="blue", label='influenced by the drift')
+        sns.kdeplot(X[:, 7], ax=axes[2], fill=True, color="red", label="original")
+        sns.kdeplot(generated_rep_entire_df[:, 7], ax=axes[2], fill=True, color="green", label="generated")
+        axes[2].set_title('KDE Plot for feature 8')
+        axes[2].set_xlabel('Value')
+        axes[2].set_ylabel('Density')
+        axes[2].grid(True)
+        axes[2].legend()
+        axes[2].set_xlim(-14,14)
 
-    #     fig.suptitle(f"Kernel Density Estimation of the Performative Features - Iteration {i}", fontsize=16)
-    #     plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the suptitle
-    #     plt.show()
+        fig.suptitle(f"Kernel Density Estimation of the Performative Features - Iteration {i}", fontsize=16)
+        plt.tight_layout(rect=[0, 0, 1, 0.96])  # Leave space for the suptitle
+        plt.show()
 
 
     #Retrain the logistic regression on t_i

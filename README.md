@@ -2,7 +2,7 @@
 This repositorium presents the process of training and evaluating of the GDAN architecture. The model is designed to achieve a stable classifier resistant to performative drift and produce a mapping of new data back to the original
 pre-drift distribution. The system integrates Domain Adversarial Neural Net-
 works, Generative Adversarial Networks, and pixel-to-pixel translation methods,
-employing necessary modifications to combine these concepts. A figure presenting the outline of the architecture is presented below.  
+employing necessary modifications to combine these concepts. A figure presenting the outline of the architecture is presented below. Feature extractor creates a generic, domain-invariant representation. Based on that the label classifier acts as a stable, drift-resistant classifier. The task of the generator is to create a mapping and project the data points, which have been influenced by the drift, back to their original form. 
 ![My figure](./img/GDANN_architecture_diagram.png)
 
 # Setting up the environment 
